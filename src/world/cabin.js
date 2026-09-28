@@ -132,12 +132,24 @@ function seatParts() {
 
   // Suite partition: the shell carries on past the screen as a tall curved wall that closes
   // the window side all the way to the cabin wall — each seat becomes a private suite.
+  // Its outer edge follows the cabin wall's curve (in seat-local z) so it never pokes through the skin.
+  const wallLocal = (y) => wallZ(FLOOR_Y + y, R_CABIN) - SEAT_Z - 0.04; // margin covers the bevel
   const outline = new THREE.Shape();
   outline.moveTo(0.34, 0);
   outline.lineTo(0.34, 1.16);
-  outline.bezierCurveTo(0.34, 1.3, 0.5, 1.38, 0.66, 1.42);
-  outline.lineTo(0.9, 1.46);
-  outline.lineTo(0.9, 0);
+  let yTop = 1.16;
+  for (let i = 1; i <= 16; i++) {                 // rounded top, rising toward the wall
+    const t = i / 16;
+    const y = 1.16 + 0.26 * Math.sin((t * Math.PI) / 2);
+    const z = 0.34 + t * 0.5;
+    if (z >= wallLocal(y)) break;
+    outline.lineTo(z, y);
+    yTop = y;
+  }
+  for (let i = 0; i <= 24; i++) {                 // then down the wall to the floor
+    const y = yTop * (1 - i / 24);
+    outline.lineTo(wallLocal(y), y);
+  }
   outline.closePath();
   const partition = new THREE.ExtrudeGeometry(outline, {
     depth: 0.12, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 3, curveSegments: 24,
