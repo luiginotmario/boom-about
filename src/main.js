@@ -8,7 +8,7 @@ import { SHOTS, CHAPTERS, sceneState, windowed, smooth } from './story.js';
 import { createCameraPath } from './camera-path.js';
 import { createComposer } from './post.js';
 import { createUI } from './ui.js';
-import { createSky, bakeEnvironment, SUN } from './world/sky.js';
+import { createSky, bakeEnvironment, loadSkyHdri, setSunElevation, SUN } from './world/sky.js';
 import { createOverture } from './world/overture.js';
 import { createCabin } from './world/cabin.js';
 import { createSymphony } from './world/symphony.js';
@@ -28,29 +28,47 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPrefer
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDpr));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.92;
+renderer.toneMapping = THREE.NeutralToneMapping; // Khronos PBR Neutral: true-to-material whites, the product-shot look
+renderer.toneMappingExposure = 0.9;
 renderer.localClippingEnabled = true;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = false; // the aircraft rarely moves: re-render shadows only when it does
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 3000);
 
-// Canvas textures use the page font — wait for it so the livery is painted in Archivo.
-await Promise.race([
-  Promise.all([document.fonts.load('700 62px Archivo'), document.fonts.load('500 17px Archivo')]),
-  new Promise((r) => setTimeout(r, 2500)),
+// A photographed sky (Poly Haven, CC0) lights the aircraft. Loaded alongside the font;
+// if it can't be reached the procedural sky stands in, so the page never blocks on it.
+const HDRI_URL = 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloofendal_48d_partly_cloudy_puresky_1k.hdr';
+const timeout = (ms) => new Promise((r) => setTimeout(r, ms));
+const [, hdri] = await Promise.all([
+  Promise.race([
+    Promise.all([document.fonts.load('700 62px Archivo'), document.fonts.load('500 54px Archivo')]),
+    timeout(2500),
+  ]),
+  Promise.race([loadSkyHdri(HDRI_URL).catch(() => null), timeout(6000).then(() => null)]),
 ]);
+if (hdri) setSunElevation(hdri.sunElevation);
 
 // ── world ───────────────────────────────────────────────────────────────
-const env = bakeEnvironment(renderer);
+const env = bakeEnvironment(renderer, hdri);
+hdri?.texture.dispose();
 scene.environment = env;
 const sky = createSky();
 scene.add(sky);
 
-const sun = new THREE.DirectionalLight(0xfff1e0, 3.2);
-sun.position.copy(SUN).multiplyScalar(100);
-const bounce = new THREE.HemisphereLight(0x7fa8ff, 0xdfe7f2, 0.32); // sky above, lit cloud deck below
-scene.add(sun, bounce);
+// The sun: warm, with soft shadows sized to the aircraft.
+const sun = new THREE.DirectionalLight(0xfff0de, 4.2);
+sun.position.copy(SUN).multiplyScalar(90);
+sun.castShadow = true;
+sun.shadow.mapSize.setScalar(mobile ? 2048 : 4096);
+Object.assign(sun.shadow.camera, { left: -38, right: 38, top: 38, bottom: -38, near: 20, far: 170 });
+sun.shadow.camera.updateProjectionMatrix();
+sun.shadow.bias = -0.0003;
+sun.shadow.normalBias = 0.035;
+sun.shadow.radius = 3;
+scene.add(sun, sun.target);
 
 const overture = createOverture(renderer);
 scene.add(overture.root);
@@ -67,7 +85,10 @@ scene.add(silicon.root);
 const shock = createShock();
 scene.add(shock.root);
 
-const post = createComposer(renderer, scene, camera, { mobile });
+const post = createComposer(renderer, scene, camera, {
+  mobile,
+  aoHidden: [sky, shock.root, overture.heroGlass], // transparent or infinitely far: no occlusion
+});
 
 // ── scroll → progress ──────────────────────────────────────────────────
 // Lenis owns the scroll, ScrollTrigger maps it to a target, the loop damps it.
@@ -143,8 +164,11 @@ const path = createCameraPath(SHOTS);
 const camPos = new THREE.Vector3();
 const camLook = new THREE.Vector3();
 const fwd = new THREE.Vector3(), right = new THREE.Vector3(), up = new THREE.Vector3();
-const intro = { v: reduced ? 0 : 1 };
+// Inspection mode: ?cam=x,y,z,lookX,lookY,lookZ,fov pins the camera (for comparing against references).
+const inspect = new URLSearchParams(location.search).get('cam')?.split(',').map(Number) ?? null;
+const intro = { v: reduced || inspect ? 0 : 1 };
 let elapsed = 0;
+let lastShadowKey = '';
 let width = window.innerWidth, height = window.innerHeight;
 
 function frame(dt) {
@@ -165,7 +189,8 @@ function frame(dt) {
   const s = sceneState(p);
 
   // camera: sample the path at the damped progress, then add a little life
-  const fov = path(p, camPos, camLook);
+  let fov = path(p, camPos, camLook);
+  if (inspect) { camPos.set(inspect[0], inspect[1], inspect[2]); camLook.set(inspect[3], inspect[4], inspect[5]); fov = inspect[6]; }
   fwd.subVectors(camLook, camPos);
   const dist = fwd.length();
   fwd.divideScalar(dist);
@@ -203,9 +228,15 @@ function frame(dt) {
   sky.material.uniforms.uDim.value = Math.max(s.dim, s.night);
   // inside the cabin the windows carry the daylight, not the walls
   const indoors = Math.max(s.cabin, s.dim);
-  sun.intensity = 3.2 * (1 - 0.88 * indoors);
-  bounce.intensity = 0.32 * (1 - 0.75 * indoors);
+  sun.intensity = 4.2 * (1 - 0.88 * indoors);
   scene.environmentIntensity = 1 - 0.82 * indoors;
+
+  // shadows only need re-rendering when the aircraft itself changes shape
+  const shadowKey = `${s.explode.toFixed(4)}|${s.cutaway.toFixed(3)}|${s.macro > 0.999}`;
+  if (shadowKey !== lastShadowKey) {
+    lastShadowKey = shadowKey;
+    renderer.shadowMap.needsUpdate = true;
+  }
 
   overture.update(s);
   cabin.update(s);
@@ -215,6 +246,7 @@ function frame(dt) {
 
   ui.update(p, s, camera, width, height);
 
+  post.setAO(s.xray < 0.01 && s.dim < 0.01 && s.night < 0.01, 2.2 + (0.45 - 2.2) * s.cabin);
   post.setTime(elapsed);
   post.composer.render(dt);
 }

@@ -2,11 +2,12 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-// HDR target (with MSAA on capable GPUs) → bloom → ACES output → vignette + grain.
-export function createComposer(renderer, scene, camera, { mobile }) {
+// HDR target (MSAA) → ambient occlusion → bloom → tone mapping → vignette + grain.
+export function createComposer(renderer, scene, camera, { mobile, aoHidden = [] }) {
   const w = window.innerWidth, h = window.innerHeight;
   const target = new THREE.WebGLRenderTarget(w, h, {
     type: THREE.HalfFloatType,
@@ -18,7 +19,29 @@ export function createComposer(renderer, scene, camera, { mobile }) {
 
   composer.addPass(new RenderPass(scene, camera));
 
-  const bloom = new UnrealBloomPass(new THREE.Vector2(w / 2, h / 2), 0.35, 0.55, 0.9);
+  // Ground-truth AO grounds the wing root, pylons and tail junctions. Half resolution,
+  // Poisson-denoised; desktop only. Transparent effects are hidden from its geometry pass.
+  let ao = null;
+  let aoRadius = 0;
+  if (!mobile) {
+    ao = new GTAOPass(scene, camera, w, h);
+    ao.output = GTAOPass.OUTPUT.Default;
+    ao.blendIntensity = 1.0;
+    ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 5, rings: 2, samples: 12 });
+    const setAoSize = ao.setSize.bind(ao);
+    ao.setSize = (width, height) => setAoSize(Math.round(width / 2), Math.round(height / 2));
+    const renderAo = ao.render.bind(ao);
+    ao.render = (...args) => {
+      const was = aoHidden.map((o) => o.visible);
+      aoHidden.forEach((o) => { o.visible = false; });
+      renderAo(...args);
+      aoHidden.forEach((o, i) => { o.visible = was[i]; });
+    };
+    composer.addPass(ao);
+  }
+
+  // Only genuinely bright things bloom: the sun, glints, emissives. Never the white paint.
+  const bloom = new UnrealBloomPass(new THREE.Vector2(w / 2, h / 2), 0.28, 0.5, 1.4);
   composer.addPass(bloom);
 
   composer.addPass(new OutputPass());
@@ -57,6 +80,15 @@ export function createComposer(renderer, scene, camera, { mobile }) {
     composer,
     bloom,
     setTime(t) { finish.uniforms.uTime.value = t; },
+    // AO radius is in metres: wide for the airframe, tight for the cabin
+    setAO(enabled, radius) {
+      if (!ao) return;
+      ao.enabled = enabled;
+      if (enabled && Math.abs(radius - aoRadius) > 0.05) {
+        aoRadius = radius;
+        ao.updateGtaoMaterial({ radius, distanceExponent: 1, thickness: radius * 1.2, scale: 1.5, samples: 16 });
+      }
+    },
     setSize(width, height) {
       composer.setPixelRatio(renderer.getPixelRatio());
       composer.setSize(width, height);

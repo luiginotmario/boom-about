@@ -235,7 +235,7 @@ export function createCabin(renderer) {
   const seatX = (r) => ROW_X0 + r * ROW_PITCH;
   const hotspots = {
     // framed from a right-hand window seat, like Boom's cabin rendering
-    window: new THREE.Vector3(WINDOW.x0 + 7 * WINDOW.pitch, WINDOW.y + 0.12, -(wallZ(WINDOW.y, R_CABIN) - 0.05)),
+    window: new THREE.Vector3(WINDOW.x0 + Math.round((-4.3 - WINDOW.x0) / WINDOW.pitch) * WINDOW.pitch, WINDOW.y + 0.12, -(wallZ(WINDOW.y, R_CABIN) - 0.05)),
     screen: new THREE.Vector3(seatX(4) + 0.57, FLOOR_Y + 1.06, -(SEAT_Z + 0.06)),
     seat: new THREE.Vector3(seatX(5) - 0.25, FLOOR_Y + 0.6, -(SEAT_Z + 0.43)),
   };

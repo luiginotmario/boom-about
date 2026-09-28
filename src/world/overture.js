@@ -3,7 +3,7 @@ import {
   NOSE, TAIL, LENGTH, SY, radiusAt, centerYAt, WINDOW, HERO_WINDOW_X,
   ENGINES, NACELLE, WING, piecewise, wingYAt,
 } from './shape.js';
-import { fuselageLivery, tailLivery } from './livery.js';
+import { fuselageLivery, tailLivery, wingBump } from './livery.js';
 
 // ── geometry builders ───────────────────────────────────────────────────
 
@@ -71,16 +71,25 @@ function liftingSurface({ z0, z1, le, te, t0, t1, yAt, side = 1, nu = 36, nw = 4
   return g;
 }
 
-function nacelleGeometry() {
-  const L = NACELLE.length, R = NACELLE.radius;
-  // outer skin forward → aft, then the inner duct back to the lip (closed profile)
-  const profile = [
-    [R * 0.8, 0], [R * 0.93, 0.35], [R, 1.2], [R, 6.8], [R * 0.86, 8.7], [R * 0.78, L],
-    [R * 0.7, L], [R * 0.74, 8.2], [R * 0.76, 1.0], [R * 0.78, 0.15], [R * 0.8, 0],
-  ].map(([r, y]) => new THREE.Vector2(r, y));
-  const g = new THREE.LatheGeometry(profile, 72);
+// Nacelle in two lathes: painted outer cowl, bare-metal duct and nozzle inside.
+function lathe(points, segments = 96) {
+  const g = new THREE.LatheGeometry(points.map(([r, y]) => new THREE.Vector2(r, y)), segments);
   g.rotateZ(-Math.PI / 2); // lathe axis Y → X, intake forward (−X)
   return g;
+}
+function nacelleGeometries() {
+  const L = NACELLE.length, R = NACELLE.radius;
+  const cowl = lathe([
+    [R * 0.84, 0], [R * 0.9, 0.06], [R * 0.96, 0.3], [R, 0.9], [R, 4.8], [R * 0.97, 6.4],
+    [R * 0.9, 7.6], [R * 0.82, L],
+  ]);
+  const duct = lathe([
+    [R * 0.84, 0], [R * 0.8, 0.25], [R * 0.79, 1.2], [R * 0.78, 6.0], [R * 0.74, 7.8], [R * 0.8, L],
+  ]);
+  // the exhaust spike that pokes out of each nozzle
+  const spike = new THREE.ConeGeometry(R * 0.44, 1.7, 64).rotateZ(-Math.PI / 2).translate(L + 0.35, 0, 0);
+  const plugBase = new THREE.CylinderGeometry(R * 0.44, R * 0.44, 0.9, 64).rotateZ(-Math.PI / 2).translate(L - 0.95, 0, 0);
+  return { cowl, duct, spike, plugBase };
 }
 
 // Blueprint structure lines: frames and stringers inside a fuselage section.
@@ -133,12 +142,13 @@ function wingStructureLines(side) {
 
 // ── materials ───────────────────────────────────────────────────────────
 
+// Aerospace topcoat: satin base under a hard clearcoat.
 function skinMaterial(opts) {
   return new THREE.MeshPhysicalMaterial({
-    roughness: 0.3,
+    roughness: 0.32,
     metalness: 0.0,
     clearcoat: 1.0,
-    clearcoatRoughness: 0.14,
+    clearcoatRoughness: 0.07,
     envMapIntensity: 1.0,
     transparent: true,
     ...opts,
@@ -190,15 +200,24 @@ export function createOverture(renderer) {
   const root = new THREE.Group();
   root.name = 'overture';
 
-  const paint = withWindows(skinMaterial({ map: fuselageLivery(renderer), color: 0xffffff }));
-  const white = skinMaterial({ color: 0xeef0f3, roughness: 0.34, clearcoat: 0.6 });
-  const fin = skinMaterial({ map: tailLivery(renderer), color: 0xffffff, side: THREE.DoubleSide });
+  const livery = fuselageLivery(renderer);
+  const paint = withWindows(skinMaterial({
+    map: livery.map, roughnessMap: livery.roughnessMap, roughness: 1, bumpMap: livery.bumpMap, bumpScale: 3,
+  }));
+  const PAINT_WHITE = 0xe3e6ea; // real white topcoat, not an albedo of 1.0
+  const white = skinMaterial({
+    color: PAINT_WHITE, roughness: 0.4, clearcoatRoughness: 0.14, bumpMap: wingBump(renderer), bumpScale: 3, side: THREE.DoubleSide,
+  });
+  const cowlMat = skinMaterial({ color: PAINT_WHITE, roughness: 0.3 });
+  const fin = skinMaterial({ map: tailLivery(renderer), roughness: 0.28, side: THREE.DoubleSide });
+  const metal = new THREE.MeshStandardMaterial({ color: 0x5b5f66, metalness: 1, roughness: 0.34, transparent: true, side: THREE.DoubleSide });
   const dark = new THREE.MeshStandardMaterial({ color: 0x0b0d12, roughness: 0.6, transparent: true, side: THREE.DoubleSide });
-  const heroNacelle = skinMaterial({ color: 0xeef0f3, roughness: 0.34, clearcoat: 0.6, side: THREE.DoubleSide, clippingPlanes: [] });
+  const heroNacelle = skinMaterial({ color: PAINT_WHITE, roughness: 0.3, side: THREE.DoubleSide, clippingPlanes: [] });
+  const heroDuct = new THREE.MeshStandardMaterial({ color: 0x5b5f66, metalness: 1, roughness: 0.34, transparent: true, side: THREE.DoubleSide, clippingPlanes: [] });
   const lines = new THREE.LineBasicMaterial({
     color: 0xfff555, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
   });
-  const skins = [paint, white, fin, dark, heroNacelle];
+  const skins = [paint, white, cowlMat, fin, metal, dark, heroNacelle, heroDuct];
 
   const parts = []; // { obj, explode: Vector3 }
   const part = (name, explode) => {
@@ -219,7 +238,7 @@ export function createOverture(renderer) {
   const sectionGroups = {};
   for (const s of sections) {
     const g = part(s.name, s.explode);
-    const skin = new THREE.Mesh(bodyGeometry(s.x0, s.x1, s.seg, 96), paint);
+    const skin = new THREE.Mesh(bodyGeometry(s.x0, s.x1, s.seg, 160), paint);
     skin.renderOrder = 2;
     g.add(skin, new THREE.LineSegments(structureLines(s.x0, s.x1), lines));
     sectionGroups[s.name] = g;
@@ -232,7 +251,8 @@ export function createOverture(renderer) {
     depthWrite: false,
   });
   const glass = new THREE.Mesh(glassGeo, glassMat);
-  const zSkin = Math.sqrt(Math.max(0, 1.55 ** 2 - (WINDOW.y / SY) ** 2));
+  const rHero = radiusAt(HERO_WINDOW_X);
+  const zSkin = Math.sqrt(Math.max(0, rHero ** 2 - (WINDOW.y / SY) ** 2));
   glass.position.set(HERO_WINDOW_X, WINDOW.y, zSkin + 0.004);
   glass.renderOrder = 3;
   sectionGroups['forward-fuselage'].add(glass);
@@ -242,7 +262,7 @@ export function createOverture(renderer) {
   for (const side of [1, -1]) {
     const g = part(side > 0 ? 'left-wing' : 'right-wing', [1.5, -2.8, 6 * side]);
     const wing = liftingSurface({
-      z0: WING.root, z1: WING.tip, le: WING.le, te: WING.te, t0: 0.62, t1: 0.05, yAt: wingYAt, side,
+      z0: WING.root, z1: WING.tip, le: WING.le, te: WING.te, t0: WING.t0, t1: WING.t1, yAt: wingYAt, side, nu: 56, nw: 96,
     });
     g.add(new THREE.Mesh(wing, white), new THREE.LineSegments(wingStructureLines(side), lines));
     wingGroups.push(g);
@@ -251,10 +271,11 @@ export function createOverture(renderer) {
   // Horizontal stabilisers.
   for (const side of [1, -1]) {
     const g = part(side > 0 ? 'left-stabilizer' : 'right-stabilizer', [9, 0.3, 3.5 * side]);
-    const y = centerYAt(28.3) - 0.05;
+    // low-set, swept, with a hint of anhedral — as on Boom's renderings
+    const y = centerYAt(26) - radiusAt(26) * SY * 0.45;
     const stab = liftingSurface({
-      z0: 0.2, z1: 4.6, le: [[0.2, 25.2], [4.6, 29.2]], te: [[0.2, 30.4], [4.6, 30.6]],
-      t0: 0.2, t1: 0.03, yAt: () => y, side, nu: 20, nw: 16,
+      z0: 0.2, z1: 6.0, le: [[0.2, 22.8], [6.0, 27.9]], te: [[0.2, 29.4], [6.0, 29.7]],
+      t0: 0.26, t1: 0.03, yAt: (z) => y - 0.045 * z, side, nu: 32, nw: 32,
     });
     g.add(new THREE.Mesh(stab, white));
   }
@@ -263,17 +284,17 @@ export function createOverture(renderer) {
   {
     const g = part('fin', [10, 5.5, 0]);
     const finGeo = liftingSurface({
-      z0: 0.8, z1: 8.3, le: [[0.8, 19.0], [8.3, 28.7]], te: [[0.8, 30.3], [8.3, 30.95]],
-      t0: 0.5, t1: 0.05, yAt: () => 0, nu: 30, nw: 30,
+      z0: 1.1, z1: 8.4, le: [[1.1, 19.2], [8.4, 27.8]], te: [[1.1, 30.3], [8.4, 29.7]],
+      t0: 0.5, t1: 0.05, yAt: () => 0, nu: 40, nw: 40,
     });
     finGeo.rotateX(-Math.PI / 2);
     g.add(new THREE.Mesh(finGeo, fin));
   }
 
   // Four Symphony nacelles, hung under the gull wing.
-  const nacelleGeo = nacelleGeometry();
-  const intakeGeo = new THREE.CircleGeometry(NACELLE.radius * 0.76, 48).rotateY(-Math.PI / 2);
-  const pylonGeo = new THREE.BoxGeometry(5.5, 0.5, 0.14);
+  const nac = nacelleGeometries();
+  const intakeGeo = new THREE.CircleGeometry(NACELLE.radius * 0.8, 64).rotateY(-Math.PI / 2);
+  const pylonGeo = new THREE.BoxGeometry(4.6, 0.36, 0.16);
   let heroEngine = null;
   wingGroups.forEach((wingGroup, wi) => {
     const side = wi === 0 ? 1 : -1;
@@ -282,12 +303,15 @@ export function createOverture(renderer) {
       holder.name = `symphony-${side > 0 ? 'L' : 'R'}${ei + 1}`;
       holder.position.set(NACELLE.x0, e.y, e.z * side);
       const isHero = side > 0 && ei === 1; // outboard: nothing between it and the camera
-      const shell = new THREE.Mesh(nacelleGeo, isHero ? heroNacelle : white);
+      const shell = new THREE.Mesh(nac.cowl, isHero ? heroNacelle : cowlMat);
+      const duct = new THREE.Mesh(nac.duct, isHero ? heroDuct : metal);
+      const spike = new THREE.Mesh(nac.spike, metal);
+      const plug = new THREE.Mesh(nac.plugBase, metal);
       const intake = new THREE.Mesh(intakeGeo, dark);
-      intake.position.x = 1.2;
-      const pylon = new THREE.Mesh(pylonGeo, white);
-      pylon.position.set(5.0, NACELLE.radius + 0.1, 0);
-      holder.add(shell, pylon);
+      intake.position.x = 1.0;
+      const pylon = new THREE.Mesh(pylonGeo, cowlMat);
+      pylon.position.set(4.4, NACELLE.radius + 0.14, 0);
+      holder.add(shell, duct, spike, plug, pylon);
       if (!isHero) holder.add(intake);
       else heroEngine = { holder, intake, clipPlanes: null };
       wingGroup.add(holder);
@@ -296,10 +320,17 @@ export function createOverture(renderer) {
     }
   });
 
-  root.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    o.frustumCulled = false;
+    o.castShadow = true;
+    o.receiveShadow = true;
+  });
+  glass.castShadow = glass.receiveShadow = false;
 
   const clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 100);
   heroNacelle.clippingPlanes = [clipPlane];
+  heroDuct.clippingPlanes = heroNacelle.clippingPlanes;
   heroEngine.clipPlanes = heroNacelle.clippingPlanes;
   const tmp = new THREE.Vector3();
 
@@ -326,7 +357,7 @@ export function createOverture(renderer) {
     heroEngine.intake.visible = s.cutaway < 0.02;
   }
 
-  return { root, update, sectionGroups, heroEngine };
+  return { root, update, sectionGroups, heroEngine, heroGlass: glass };
 }
 
 export function roundedRectShape(w, h, r) {

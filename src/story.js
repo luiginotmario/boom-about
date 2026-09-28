@@ -14,12 +14,12 @@ export const SHOTS = [
   { p: 0.150, pos: [6, 3, 34], look: [-1.5, -0.8, 0], fov: 32 },
 
   // 03 — Approach: line up on one window and push in until it fills frame.
-  { p: 0.195, pos: [-1.2, 0.9, 11], look: [-2.05, 0.2, 0], fov: 34 },
-  { p: 0.225, pos: [-2.05, 0.3, 4.2], look: [-2.05, 0.2, 0], fov: 36 },
-  { p: 0.250, pos: [-2.05, 0.22, 1.9], look: [-2.05, 0.2, -1], fov: 40 },
+  { p: 0.195, pos: [-1.2, 0.9, 11], look: [-2.0, 0.2, 0], fov: 34 },
+  { p: 0.225, pos: [-2.0, 0.3, 4.2], look: [-2.0, 0.2, 0], fov: 36 },
+  { p: 0.250, pos: [-2.0, 0.22, 1.9], look: [-2.0, 0.2, -1], fov: 40 },
 
   // 04 — Cabin: through the glass, turn down the aisle, settle at a window seat.
-  { p: 0.268, pos: [-2.05, 0.28, 1.05], look: [-2.6, 0.2, -2], fov: 50 },
+  { p: 0.268, pos: [-2.0, 0.28, 1.05], look: [-2.6, 0.2, -2], fov: 50 },
   { p: 0.290, pos: [-1.6, 0.42, 0.1], look: [-7.5, 0.05, 0.25], fov: 52 },
   { p: 0.330, pos: [1.3, 0.48, -0.05], look: [-6.0, 0.0, 0.55], fov: 52 },
   { p: 0.370, pos: [-3.05, 0.62, -0.05], look: [-4.6, 0.1, -1.0], fov: 50 }, // down the aisle, then step into the seat
@@ -41,10 +41,10 @@ export const SHOTS = [
   { p: 0.662, pos: [-23.9975, 0.5818, 0.3150], look: [-24.0, 0.5798, 0.3027], fov: 30 },
 
   // 08 — Symphony: pull all the way back out as the aircraft reassembles, swing to an engine.
-  { p: 0.686, pos: [-8, 4, 26], look: [8, -1.8, 6.4], fov: 34 },
-  { p: 0.705, pos: [17.5, -2.9, 17.5], look: [21.0, -2.2, 6.4], fov: 32 },
-  { p: 0.742, pos: [15.4, -2.8, 12.8], look: [20.3, -2.2, 6.4], fov: 32 },
-  { p: 0.780, pos: [23.5, -2.6, 15.5], look: [20.8, -2.2, 6.4], fov: 32 },
+  { p: 0.686, pos: [-8, 4, 26], look: [8, -1.8, 5.5], fov: 34 },
+  { p: 0.705, pos: [17.5, -2.9, 16.6], look: [21.0, -2.15, 5.5], fov: 32 },
+  { p: 0.742, pos: [15.4, -2.8, 11.9], look: [20.3, -2.15, 5.5], fov: 32 },
+  { p: 0.780, pos: [23.5, -2.6, 14.6], look: [20.8, -2.15, 5.5], fov: 32 },
 
   // 09 — Mach: back out wide, watch the shock cone form and sharpen.
   { p: 0.805, pos: [6, 5, 58], look: [0.0, 0.0, 0.0], fov: 32 },

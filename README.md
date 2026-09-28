@@ -37,6 +37,27 @@ in code.
   are painted to canvases at startup. CDN versions are pinned: three 0.170.0, gsap 3.12.5,
   lenis 1.1.0.
 
+## Rendering
+
+The aircraft is lit and shaded like a product render, in real time:
+
+- **Photographed sky light.** A CC0 sky HDRI from Poly Haven (`kloofendal_48d_partly_cloudy_puresky`)
+  is loaded at runtime, its sun located and rotated into the scene's sun azimuth, then baked into a
+  PMREM with the procedural cloud deck as the lower hemisphere. The HDRI's sun is clamped out so the
+  directional light owns it. If the CDN is unreachable, the procedural sky stands in. For production,
+  vendor the 1.4 MB `.hdr` next to the page.
+- **Sun and soft shadows.** One directional light at the HDRI's sun elevation, with a 4K PCF-soft shadow map
+  fitted to the airframe. It only re-renders when the aircraft changes shape.
+- **Ambient occlusion.** GTAO at half resolution, Poisson-denoised (desktop), for contact shadowing
+  at the wing root, pylons and tail junctions.
+- **Materials.** Clearcoat topcoat over a satin base, with roughness and bump maps painted to match the
+  livery: glossy cockpit glass, a glossier dark band, panel seams, doors and control-surface lines.
+  Bare-metal ducts and exhaust spikes.
+- **Atmosphere.** A Preetham daylight model above the horizon, and a ray-traced spherical cloud deck
+  lit from its own relief below, fading into the horizon colour of each azimuth.
+- **Tone mapping.** Khronos PBR Neutral, so the whites stay true. Bloom only picks up
+  genuinely bright sources (the sun, glints, emissives).
+
 ## Run it
 
 ES modules plus an import map need to be served over HTTP (double-clicking the file won't work):
@@ -45,7 +66,8 @@ ES modules plus an import map need to be served over HTTP (double-clicking the f
 python3 -m http.server 5173
 ```
 
-Then open http://localhost:5173. Append `?p=0.64` to jump straight to any moment (0–1).
+Then open http://localhost:5173. Append `?p=0.64` to jump straight to any moment (0–1), or
+`?cam=x,y,z,lookX,lookY,lookZ,fov` to pin the camera anywhere (handy for comparing against reference renders).
 
 ## Layout
 

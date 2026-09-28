@@ -1,5 +1,5 @@
-// Overture's outer mould line, simplified to a handful of analytic curves.
-// Units are metres. Nose at x = −30.5, tail at x = +30.5 (201 ft overall).
+// Overture's outer mould line, simplified to analytic curves traced from Boom's renderings.
+// Units are metres. Nose at x = −30.5, tail at x = +30.5 (201 ft overall), left side toward +Z.
 
 export const NOSE = -30.5;
 export const TAIL = 30.5;
@@ -9,53 +9,54 @@ export const R_CABIN = 1.40;    // cabin wall radius
 export const SY = 1.05;         // cross-section is slightly taller than wide
 export const FLOOR_Y = -0.62;
 
-const CABIN_START = -13;
-const CABIN_END = 12;
+const CABIN_START = -12;
+const CABIN_END = 10;
+
+const smooth = (a, b, v) => {
+  const t = Math.min(1, Math.max(0, (v - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
 
 export function radiusAt(x) {
   if (x < CABIN_START) {
+    // long needle nose
     const s = (x - NOSE) / (CABIN_START - NOSE);
-    return R * Math.pow(Math.sin(s * Math.PI / 2), 1.55);
+    return R * Math.pow(Math.sin(s * Math.PI / 2), 1.45);
   }
   if (x > CABIN_END) {
+    // tail cone tapers to a blade where the fin trailing edge ends
     const s = (x - CABIN_END) / (TAIL - CABIN_END);
-    return R * (1 - 0.9 * Math.pow(s, 1.6));
+    return R * (1 - 0.93 * Math.pow(s, 1.45));
   }
-  return R;
+  // area-ruled waist where the wing is thickest
+  return R * (1 - 0.035 * smooth(-2, 6, x) * (1 - smooth(8, 14, x)));
 }
 
-// the nose droops a little, the tail cone sweeps up
 export function centerYAt(x) {
   if (x < CABIN_START) {
     const s = (x - NOSE) / (CABIN_START - NOSE);
-    return -0.32 * (1 - s) * (1 - s);
+    return -0.34 * (1 - s) * (1 - s);           // the nose sits slightly low
   }
   if (x > CABIN_END) {
-    const s = (x - CABIN_END) / (TAIL - CABIN_END);
-    return 0.55 * s * s;
+    // the crown stays nearly straight while the belly sweeps up to the tail
+    return (R - radiusAt(x)) * SY * 0.78;
   }
   return 0;
 }
 
-// Cabin windows: two rows, one per side.
-export const WINDOW = { x0: -11.5, pitch: 1.05, count: 21, y: 0.18, hw: 0.2, hh: 0.28 };
-export const HERO_WINDOW_INDEX = 9; // the one the camera flies through
-export const HERO_WINDOW_X = WINDOW.x0 + WINDOW.pitch * HERO_WINDOW_INDEX; // −2.05
+// Cabin windows: small, closely spaced, one row per side.
+export const WINDOW = { x0: -11.6, pitch: 0.8, count: 27, y: 0.2, hw: 0.16, hh: 0.23 };
+export const HERO_WINDOW_INDEX = 12; // the one the camera flies through
+export const HERO_WINDOW_X = WINDOW.x0 + WINDOW.pitch * HERO_WINDOW_INDEX; // −2.0
 
-// Engines: inboard/outboard, x span of the nacelle, centre height.
-export const ENGINES = [
-  { z: 3.9, y: -2.05 },
-  { z: 6.4, y: -2.2 },
-];
-export const NACELLE = { x0: 14.0, length: 9.3, radius: 0.75 };
-
-// Wing planform (half-span, +Z side). Piecewise-linear leading/trailing edges.
+// Cranked-arrow wing: ogival leading edge, notched trailing edge, tips furthest aft.
 export const WING = {
-  y: -0.85,
   root: 0.9,
   tip: 16.2,
-  le: [[0.9, -9.5], [5.0, 4.0], [13.8, 14.5], [16.2, 17.6]],
-  te: [[0.9, 23.5], [9.0, 21.6], [16.2, 20.0]],
+  le: [[0.9, -11.5], [2.2, -4.0], [3.6, 1.0], [5.6, 5.4], [8.2, 9.2], [11.2, 12.8], [14.2, 16.6], [16.2, 19.4]],
+  te: [[0.9, 24.0], [3.0, 22.2], [6.4, 20.4], [16.2, 21.4]],
+  t0: 0.66,   // root thickness
+  t1: 0.05,   // tip thickness
 };
 
 export function piecewise(points, z) {
@@ -68,7 +69,27 @@ export function piecewise(points, z) {
   return points[points.length - 1][1];
 }
 
-// Gull wing: anhedral inboard to the engines, gentle dihedral outboard.
+// Gentle gull: a touch of anhedral to the engines, then dihedral outboard.
 export function wingYAt(z) {
-  return WING.y - 0.09 * Math.min(Math.max(z - 1.3, 0), 5) + 0.035 * Math.max(z - 6.3, 0);
+  return -1.22 - 0.05 * Math.min(Math.max(z - 1.3, 0), 4.6) + 0.035 * Math.max(z - 5.9, 0); // low wing
 }
+
+// Biconvex half-thickness at chord fraction u (0 = leading edge, 1 = trailing edge).
+export function wingHalfThickness(z, u) {
+  const w = (z - WING.root) / (WING.tip - WING.root);
+  const tm = WING.t0 + (WING.t1 - WING.t0) * w;
+  return (tm / 2) * Math.pow(Math.max(0, 1 - (2 * u - 1) ** 2), 0.7);
+}
+
+export function wingLowerY(x, z) {
+  const le = piecewise(WING.le, z), te = piecewise(WING.te, z);
+  const u = Math.min(1, Math.max(0, (x - le) / (te - le)));
+  return wingYAt(z) - wingHalfThickness(z, u);
+}
+
+// Four Symphony engines, paired close under the inboard wing, nozzles past the trailing edge.
+export const NACELLE = { x0: 14.6, length: 8.6, radius: 0.72 };
+export const ENGINES = [3.35, 5.5].map((z) => ({
+  z,
+  y: wingLowerY(NACELLE.x0 + 4.5, z) - NACELLE.radius - 0.12,
+}));

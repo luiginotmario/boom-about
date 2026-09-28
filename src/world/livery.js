@@ -1,13 +1,17 @@
 import * as THREE from 'three';
 import { NOSE, LENGTH, SY, radiusAt, centerYAt } from './shape.js';
 
-// Livery painted at runtime on canvases. The fuselage texture is unwrapped
-// as u = along the body, v = angle around it (θ = 0 on the +Z side, mid-height).
+// Livery painted at runtime on canvases, traced from Boom's Overture renderings.
+// The fuselage is unwrapped as u = along the body (nose → tail) and v = angle around it
+// (θ = 0 on the +Z side at mid-height). Three maps share that layout:
+//   map        — base colour
+//   roughness  — satin paint, glossier dark band, mirror-like cockpit glass
+//   bump       — panel seams and door outlines
 
-const NAVY = [20, 33, 61];
-const NAVY_DEEP = [11, 19, 38];
-const GREY = [96, 106, 124];
-const WHITE = [244, 245, 247];
+const W = 4096, H = 1024;
+const WHITE = [236, 238, 241];
+const INK = [17, 21, 30];         // the near-black navy of the band and fin
+const GLASS = [10, 13, 19];
 
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = (a, b, v) => {
@@ -15,100 +19,163 @@ const smooth = (a, b, v) => {
   return t * t * (3 - 2 * t);
 };
 
-function canvasTexture(canvas, renderer) {
+function canvas2d(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return [c, c.getContext('2d')];
+}
+
+function canvasTexture(canvas, renderer, srgb = true) {
   const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
+  if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
   tex.flipY = false;
-  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  tex.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
   tex.needsUpdate = true;
   return tex;
 }
 
-export function fuselageLivery(renderer) {
-  const W = 4096, H = 1024;
-  const canvas = document.createElement('canvas');
-  canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext('2d');
+// Signed coverage of the dark band at (x, h), h = sin θ (−1 belly … +1 crown).
+function bandCoverage(x, h, aa) {
+  if (x < -10.5) return 0;
+  // top edge: just under the windows up front, climbing over the aft windows, then the whole tail
+  const top1 = -0.075 + 0.4 * smooth(-3, 14, x);
+  const top = top1 + (1.5 - top1) * smooth(13, 27.5, x);
+  // bottom edge: a sharp point behind the door that drops to the belly within a few metres
+  const bottom = lerp(-0.075, -1.2, smooth(-10.5, -1.5, x));
+  return smooth(-aa, aa, top - h) * smooth(-aa, aa, h - bottom);
+}
 
-  // 1 — base paint: white forward, navy sweeping up the aft body to the tail.
-  const img = ctx.createImageData(W, H);
+// Cockpit visor on each side of the nose, as elevation angles e = asin(h).
+const VISOR = { x: [-25.6, -22.5, -18, -13, -9.4], lo: [0.62, 0.44, 0.36, 0.42, 0.6], hi: [0.62, 1.02, 1.14, 1.02, 0.6] };
+function visorCoverage(x, e, aa) {
+  if (x <= VISOR.x[0] || x >= VISOR.x[VISOR.x.length - 1]) return 0;
+  let i = 0;
+  while (x > VISOR.x[i + 1]) i++;
+  const t = (x - VISOR.x[i]) / (VISOR.x[i + 1] - VISOR.x[i]);
+  const k = t * t * (3 - 2 * t);
+  const lo = lerp(VISOR.lo[i], VISOR.lo[i + 1], k), hi = lerp(VISOR.hi[i], VISOR.hi[i + 1], k);
+  return smooth(-aa, aa, e - lo) * smooth(-aa, aa, hi - e);
+}
+
+export function fuselageLivery(renderer) {
+  const [colC, col] = canvas2d(W, H);
+  const [rghC, rgh] = canvas2d(W, H);
+  const [bmpC, bmp] = canvas2d(W, H);
+
+  // 1 — per-pixel base: paint, band and glass, with matching roughness
+  const ci = col.createImageData(W, H);
+  const ri = rgh.createImageData(W, H);
+  let seed = 11;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const streak = new Float32Array(W).map(() => (rnd() - 0.5) * 0.035);
+  const rowH = new Float32Array(H), rowE = new Float32Array(H);
+  for (let j = 0; j < H; j++) {
+    rowH[j] = Math.sin((j / (H - 1)) * Math.PI * 2);
+    rowE[j] = Math.asin(Math.max(-1, Math.min(1, rowH[j])));
+  }
   for (let i = 0; i < W; i++) {
-    const u = i / (W - 1);
-    const boundary = lerp(-1.25, 1.35, smooth(0.5, 0.93, u)); // in units of sin θ
+    const x = NOSE + (i / (W - 1)) * LENGTH;
     for (let j = 0; j < H; j++) {
-      const th = (j / (H - 1)) * Math.PI * 2;
-      const h = Math.sin(th);
+      const band = bandCoverage(x, rowH[j], 0.006);
+      const glass = visorCoverage(x, rowE[j], 0.008);
       const k = (j * W + i) * 4;
-      let c = WHITE;
-      const edge = boundary - h;
-      if (edge > 0.0) {
-        const g = smooth(0.0, 0.22, edge);
-        const deep = smooth(0.3, 1.4, edge) * 0.6 + smooth(0.8, 1.0, u) * 0.4;
-        const navy = [lerp(NAVY[0], NAVY_DEEP[0], deep), lerp(NAVY[1], NAVY_DEEP[1], deep), lerp(NAVY[2], NAVY_DEEP[2], deep)];
-        c = [lerp(GREY[0], navy[0], g), lerp(GREY[1], navy[1], g), lerp(GREY[2], navy[2], g)];
-      }
-      img.data[k] = c[0]; img.data[k + 1] = c[1]; img.data[k + 2] = c[2]; img.data[k + 3] = 255;
+      for (let n = 0; n < 3; n++) ci.data[k + n] = lerp(lerp(WHITE[n], INK[n], band), GLASS[n], glass);
+      ci.data[k + 3] = 255;
+      // roughness lives in G: satin white 0.34, band 0.28, glass 0.04, with faint streaks
+      const r = lerp(lerp(0.34, 0.28, band), 0.04, glass) + streak[i] * (1 - glass);
+      const g = Math.round(Math.min(1, Math.max(0, r)) * 255);
+      ri.data[k] = g; ri.data[k + 1] = g; ri.data[k + 2] = g; ri.data[k + 3] = 255;
     }
   }
-  ctx.putImageData(img, 0, 0);
+  col.putImageData(ci, 0, 0);
+  rgh.putImageData(ri, 0, 0);
 
-  // Helpers to paint in metres on the body: x along the fuselage, arc up the side.
+  // Paint in metres: x along the body, y up the side.
   const px = (x) => ((x - NOSE) / LENGTH) * W;
   const thetaFor = (x, y) => Math.asin(Math.max(-1, Math.min(1, (y - centerYAt(x)) / (radiusAt(x) * SY))));
   const py = (th) => (((th % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2) * H;
+  const bothSides = (th) => [py(th), py(Math.PI - th)];
 
-  // 2 — cabin windows are drawn in the skin shader (see overture.js), not painted here.
-
-  // 3 — cockpit visor: the dark band that runs along the upper nose.
-  ctx.fillStyle = '#07090d';
-  for (const side of [1, -1]) {
-    ctx.beginPath();
-    const xs = [-25.5, -22, -18, -15.2];
-    const lo = [0.62, 0.5, 0.46, 0.5];
-    const hi = [0.62, 0.95, 0.98, 0.9];
-    const at = (th) => (side > 0 ? th : Math.PI - th);
-    ctx.moveTo(px(xs[0]), py(at(lo[0])));
-    for (let i = 1; i < xs.length; i++) ctx.lineTo(px(xs[i]), py(at(lo[i])));
-    for (let i = xs.length - 1; i >= 0; i--) ctx.lineTo(px(xs[i]), py(at(hi[i])));
-    ctx.closePath();
-    ctx.fill();
+  // 2 — panel seams and doors in the bump map (mid-grey base, seams pressed in)
+  bmp.fillStyle = 'rgb(128,128,128)';
+  bmp.fillRect(0, 0, W, H);
+  bmp.strokeStyle = 'rgb(92,92,92)';
+  bmp.lineWidth = 2;
+  for (const x of [-24, -19, -13, -7.5, -1, 4.5, 10, 15, 20.5, 25.5]) {
+    bmp.beginPath(); bmp.moveTo(px(x), 0); bmp.lineTo(px(x), H); bmp.stroke();
   }
-
-  // 4 — subtle panel lines and doors.
-  ctx.strokeStyle = 'rgba(40,48,64,0.35)';
-  ctx.lineWidth = 2;
-  for (const x of [-13, -1, 12]) {
-    ctx.beginPath(); ctx.moveTo(px(x), 0); ctx.lineTo(px(x), H); ctx.stroke();
+  bmp.lineWidth = 1.5;
+  for (const y of [0.78, -0.42]) {
+    for (const t of bothSides(thetaFor(0, y))) {
+      bmp.beginPath(); bmp.moveTo(px(-13), t); bmp.lineTo(px(10), t); bmp.stroke();
+    }
   }
-  for (const [x, w] of [[-12.6, 0.9], [8.9, 0.8]]) {
-    const th0 = thetaFor(x, -0.55), th1 = thetaFor(x, 0.95);
-    for (const t of [[th0, th1], [Math.PI - th1, Math.PI - th0]]) {
-      ctx.beginPath();
-      ctx.roundRect(px(x), py(t[0]), (w / LENGTH) * W, py(t[1]) - py(t[0]), 10);
-      ctx.stroke();
+  bmp.lineWidth = 2.5;
+  for (const [x, w] of [[-11.1, 0.85], [8.6, 0.8]]) {
+    const t0 = thetaFor(x, -0.5), t1 = thetaFor(x, 0.98);
+    for (const [a, b] of [[py(t0), py(t1)], [py(Math.PI - t1), py(Math.PI - t0)]]) {
+      bmp.beginPath();
+      bmp.roundRect(px(x), Math.min(a, b), (w / LENGTH) * W, Math.abs(b - a), 8);
+      bmp.stroke();
     }
   }
 
-  // 5 — OVERTURE wordmark, aft body, +Z side (canvas is flipped vertically there).
-  const wx = 17.5;
-  const r = radiusAt(wx);
-  const sy = H / (Math.PI * 2 * r * SY);
-  const sx = W / LENGTH;
-  ctx.save();
-  ctx.translate(px(wx), py(thetaFor(wx, centerYAt(wx) + 0.02)));
-  ctx.scale(sx / 100, -sy / 100); // draw in centimetres: tiny px font sizes rasterise poorly
-  ctx.fillStyle = '#f4f5f7';
-  ctx.font = '700 62px Archivo, "Helvetica Neue", Arial, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  if ('letterSpacing' in ctx) ctx.letterSpacing = '9px';
-  ctx.fillText('OVERTURE', 0, 0);
-  ctx.restore();
+  // Text reads nose-to-tail on the left (+Z) side and tail-to-nose on the right (−Z) side,
+  // so each side gets its own flip. Everything is drawn in centimetres.
+  const onSide = (side, x, y, draw) => {
+    const th = thetaFor(x, y);
+    col.save();
+    col.translate(px(x), py(side > 0 ? th : Math.PI - th));
+    const sx = W / LENGTH / 100, sy = H / (Math.PI * 2 * radiusAt(x) * SY) / 100;
+    col.scale(side > 0 ? sx : -sx, side > 0 ? -sy : sy);
+    draw();
+    col.restore();
+  };
 
-  return canvasTexture(canvas, renderer);
+  for (const side of [1, -1]) {
+    // 3 — small Boom mark just ahead of the front door
+    onSide(side, -12.4, 0.36, () => drawBoomMark(col, 0, 0, 26, 'rgb(28,34,48)'));
+
+    // 4 — OVERTURE wordmark on the band, aft body
+    onSide(side, 16.5, centerYAt(16.5) - 0.2, () => {
+      col.fillStyle = 'rgb(238,240,243)';
+      col.font = '500 54px Archivo, "Helvetica Neue", Arial, sans-serif';
+      col.textAlign = 'center';
+      col.textBaseline = 'middle';
+      if ('letterSpacing' in col) col.letterSpacing = '16px';
+      col.fillText('OVERTURE', 0, 0);
+    });
+  }
+
+  return {
+    map: canvasTexture(colC, renderer),
+    roughnessMap: canvasTexture(rghC, renderer, false),
+    bumpMap: canvasTexture(bmpC, renderer, false),
+  };
 }
 
-// Boom's sunburst on the fin: tapered rays fanning out from one point.
+// Boom's starburst: slim feathered rays radiating from one point.
+export function drawBoomMark(ctx, cx, cy, radius, color, rays = 17) {
+  ctx.fillStyle = color;
+  for (let i = 0; i < rays; i++) {
+    const t = i / (rays - 1);
+    const a = Math.PI * (-0.28 + 1.56 * t);
+    const len = radius * (0.62 + 0.38 * Math.pow(Math.sin(t * Math.PI), 0.6)) * (i % 2 ? 0.86 : 1);
+    const w = radius * 0.075;
+    const dx = Math.cos(a), dy = -Math.sin(a);
+    const nx = -dy, ny = dx;
+    const r0 = radius * 0.16;
+    ctx.beginPath();
+    ctx.moveTo(cx + dx * r0 + nx * w * 0.25, cy + dy * r0 + ny * w * 0.25);
+    ctx.lineTo(cx + dx * len * 0.82 + nx * w, cy + dy * len * 0.82 + ny * w);
+    ctx.quadraticCurveTo(cx + dx * len * 1.02, cy + dy * len * 1.02, cx + dx * len * 0.82 - nx * w, cy + dy * len * 0.82 - ny * w);
+    ctx.lineTo(cx + dx * r0 - nx * w * 0.25, cy + dy * r0 - ny * w * 0.25);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+// The simpler fan used on screens and the cabin bulkhead.
 export function drawSunburst(ctx, cx, cy, radius, color, rays = 13) {
   ctx.fillStyle = color;
   for (let i = 0; i < rays; i++) {
@@ -125,24 +192,37 @@ export function drawSunburst(ctx, cx, cy, radius, color, rays = 13) {
   }
 }
 
-// Fin texture: u = chord (0 leading edge → 1 trailing edge), v = span (0 root → 1 tip).
+// Fin: u = chord (0 leading edge → 1 trailing edge), v = span (0 root → 1 tip).
 export function tailLivery(renderer) {
   const S = 1024;
-  const canvas = document.createElement('canvas');
-  canvas.width = S; canvas.height = S;
-  const ctx = canvas.getContext('2d');
-  const g = ctx.createLinearGradient(0, 0, S, S);
-  g.addColorStop(0, '#1a2a4f');
-  g.addColorStop(1, '#0b1326');
-  ctx.fillStyle = g;
+  const [c, ctx] = canvas2d(S, S);
+  ctx.fillStyle = `rgb(${INK.join(',')})`;
   ctx.fillRect(0, 0, S, S);
-  // canvas y = span (flipY is off); flip so the burst fans from near the root toward the tip
+  // canvas y runs root → tip; flip so the mark draws upright
   ctx.save();
   ctx.translate(0, S);
   ctx.scale(1, -1);
-  drawSunburst(ctx, S * 0.64, S * 0.8, S * 0.42, '#f4f5f7', 13);
+  drawBoomMark(ctx, S * 0.5, S * 0.72, S * 0.36, 'rgb(236,238,241)');
   ctx.restore();
-  return canvasTexture(canvas, renderer);
+  return canvasTexture(c, renderer);
+}
+
+// Control-surface hinge lines and panel seams for the wing and tailplanes (u chord, v span).
+export function wingBump(renderer) {
+  const S = 1024;
+  const [c, ctx] = canvas2d(S, S);
+  ctx.fillStyle = 'rgb(128,128,128)';
+  ctx.fillRect(0, 0, S, S);
+  ctx.strokeStyle = 'rgb(90,90,90)';
+  ctx.lineWidth = 3;
+  const line = (u0, v0, u1, v1) => { ctx.beginPath(); ctx.moveTo(u0 * S, v0 * S); ctx.lineTo(u1 * S, v1 * S); ctx.stroke(); };
+  line(0.82, 0.2, 0.82, 0.97);                   // elevon hinge line
+  for (const v of [0.2, 0.46, 0.72, 0.97]) line(0.82, v, 1, v);
+  line(0.1, 0.05, 0.1, 0.98);                    // leading-edge panel
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgb(108,108,108)';
+  for (const v of [0.14, 0.3, 0.46, 0.62, 0.78]) line(0.1, v, 0.82, v);
+  return canvasTexture(c, renderer, false);
 }
 
 // Seat-back screen: a moving-map in Overture's UI style.
