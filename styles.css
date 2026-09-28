@@ -266,29 +266,36 @@ html.ready .loader { opacity: 0; visibility: hidden; }
 .hint-touch { display: none; }
 @media (hover: none) { .hint-fine { display: none; } .hint-touch { display: inline; } }
 
-/* by the numbers — odometer grid, after Boom's own */
-.cap--numbers .title { margin-bottom: 22px; }
+/* by the numbers — frosted tiles, set in Inter, odometer digits after Boom's own */
+.cap--numbers { font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif; }
+.cap--numbers .title { margin-bottom: 22px; letter-spacing: -0.025em; }
 .stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  border-top: 1px solid var(--line);
-  border-left: 1px solid var(--line);
-  background: var(--glass);
-  backdrop-filter: blur(14px) saturate(1.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  gap: 8px;
 }
-.stat { padding: 18px 18px 16px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.stat:first-child { grid-column: span 2; }
-.stat dt { order: 2; margin-top: 6px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
-.stat { display: flex; flex-direction: column-reverse; justify-content: flex-end; }
+.stat {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  padding: 18px 20px 16px;
+  border-radius: 22px;
+  background: rgba(10, 16, 30, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+}
+.stat:first-child, .stat:last-child { grid-column: span 2; }
+.stat dt { order: 2; margin-top: 6px; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
 .stat dd {
   display: flex;
   align-items: baseline;
-  gap: 2px;
+  gap: 3px;
   color: var(--yellow);
   font-size: clamp(24px, 2.4vw, 34px);
-  font-weight: 700;
-  font-stretch: 112%;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -428,8 +435,9 @@ html.ready .loader { opacity: 0; visibility: hidden; }
   }
   .cap::before { inset: -120px -60px -80px; background: linear-gradient(transparent, rgba(2, 8, 22, 0.6) 40%); }
   .stats { grid-template-columns: repeat(2, 1fr); }
-  .stat { padding: 12px; }
+  .stat { padding: 12px 14px; border-radius: 18px; }
   .stat:first-child { grid-column: span 2; }
+  .stat:last-child { grid-column: auto; }
   .hud-chapter { display: none; }
   .hotspot-card { width: 190px; }
 }
