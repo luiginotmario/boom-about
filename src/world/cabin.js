@@ -88,22 +88,37 @@ function box(w, h, d, x, y, z, r = 0.03, rotZ = 0) {
 }
 
 // One seat pod in local space: forward = −X, floor at y = 0, window side = +Z.
+// Laid out after Boom's cabin rendering: a sculpted white shell carrying a large screen
+// for the seat behind, a dark fabric headrest block on top, a walnut console with a
+// leather armrest and controls, a small lit nook by the window, and a clothed tray table.
 function seatParts() {
   const shell = mergeGeometries([
-    box(0.1, 1.22, 0.8, 0.5, 0.61, 0.06, 0.05),       // tall back shell
-    box(0.95, 0.68, 0.07, 0.05, 0.34, -0.37, 0.03),   // aisle-side wing
+    box(0.22, 1.18, 0.84, 0.47, 0.59, 0.04, 0.09),    // sculpted back shell
+    box(0.42, 1.02, 0.12, 0.3, 0.51, -0.37, 0.05),    // aisle wrap, tall at the back (thicker than the wing: no z-fighting)
+    box(0.95, 0.62, 0.07, 0.02, 0.31, -0.37, 0.03),   // aisle-side wing
     box(0.95, 0.56, 0.26, 0.05, 0.28, 0.43, 0.04),    // console base
+    box(0.3, 0.46, 0.2, 0.42, 0.95, 0.5, 0.05),       // shell wing by the window
+    box(0.2, 0.025, 0.16, 0.2, 0.86, 0.52, 0.01),     // lit nook shelf
     box(0.34, 0.34, 0.44, -0.52, 0.17, 0.06, 0.06),   // ottoman
+    box(0.44, 0.012, 0.5, -0.78, 0.735, 0.02, 0.005), // tablecloth
   ]);
   const leather = mergeGeometries([
     box(0.62, 0.14, 0.56, 0.05, 0.45, 0.04, 0.06),    // cushion
-    box(0.14, 0.72, 0.54, 0.36, 0.86, 0.04, 0.06, -0.18), // backrest, reclined
-    box(0.55, 0.06, 0.1, 0.1, 0.67, -0.3, 0.025),     // armrest
-    box(0.02, 0.34, 0.52, 0.555, 0.95, 0.06, 0.01),   // screen bezel
+    box(0.14, 0.72, 0.54, 0.34, 0.86, 0.04, 0.06, -0.18), // backrest, reclined
+    box(0.55, 0.06, 0.1, 0.1, 0.67, -0.3, 0.025),     // aisle armrest
+    box(0.02, 0.44, 0.7, 0.585, 0.87, 0.04, 0.012),   // screen bezel
+    box(0.02, 0.2, 0.7, 0.585, 0.56, 0.04, 0.01),     // dark panel under the screen (the table stows here)
+    box(0.38, 0.05, 0.22, 0.3, 0.6, 0.43, 0.02),      // leather armrest on the console
   ]);
-  const head = box(0.13, 0.26, 0.46, 0.45, 1.33, 0.04, 0.06);
-  const walnut = box(0.97, 0.035, 0.28, 0.05, 0.575, 0.43, 0.012);
-  const screen = new THREE.PlaneGeometry(0.46, 0.29).rotateY(Math.PI / 2).translate(0.567, 0.95, 0.06);
+  const head = mergeGeometries([
+    box(0.17, 0.34, 0.62, 0.46, 1.33, 0.04, 0.05),    // headrest block above the shell
+    box(0.12, 0.014, 0.09, 0.3, 0.63, 0.43, 0.005),   // console control panel
+  ]);
+  const walnut = mergeGeometries([
+    box(0.62, 0.035, 0.28, -0.16, 0.575, 0.43, 0.012), // console top, forward of the armrest
+    box(0.5, 0.03, 0.6, -0.78, 0.715, 0.02, 0.01),     // tray table (deployed from the seat ahead)
+  ]);
+  const screen = new THREE.PlaneGeometry(0.64, 0.4).rotateY(Math.PI / 2).translate(0.597, 0.87, 0.04);
   return { shell, leather, head, walnut, screen };
 }
 
@@ -211,7 +226,10 @@ export function createCabin(renderer) {
   const m4 = new THREE.Matrix4();
   for (const side of [1, -1]) {
     for (const key of Object.keys(parts)) {
-      const geo = side > 0 ? parts[key] : mirrorZ(parts[key]);
+      // mirror the pods for the right-hand side, but never the screens (their UI would read backwards)
+      const geo = side > 0 ? parts[key]
+        : key === 'screen' ? parts[key].clone().translate(0, 0, -2 * 0.04)
+        : mirrorZ(parts[key]);
       const mesh = new THREE.InstancedMesh(geo, mats[key], ROWS);
       for (let r = 0; r < ROWS; r++) {
         mesh.setMatrixAt(r, m4.makeTranslation(ROW_X0 + r * ROW_PITCH, FLOOR_Y, side * SEAT_Z));
@@ -236,7 +254,7 @@ export function createCabin(renderer) {
   const hotspots = {
     // framed from a right-hand window seat, like Boom's cabin rendering
     window: new THREE.Vector3(WINDOW.x0 + Math.round((-4.3 - WINDOW.x0) / WINDOW.pitch) * WINDOW.pitch, WINDOW.y + 0.12, -(wallZ(WINDOW.y, R_CABIN) - 0.05)),
-    screen: new THREE.Vector3(seatX(4) + 0.57, FLOOR_Y + 1.06, -(SEAT_Z + 0.06)),
+    screen: new THREE.Vector3(seatX(4) + 0.6, FLOOR_Y + 0.98, -(SEAT_Z + 0.04)),
     seat: new THREE.Vector3(seatX(5) - 0.25, FLOOR_Y + 0.6, -(SEAT_Z + 0.43)),
   };
 

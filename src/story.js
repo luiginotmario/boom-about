@@ -23,7 +23,7 @@ export const SHOTS = [
   { p: 0.290, pos: [-1.6, 0.42, 0.1], look: [-7.5, 0.05, 0.25], fov: 52 },
   { p: 0.330, pos: [1.3, 0.48, -0.05], look: [-6.0, 0.0, 0.55], fov: 52 },
   { p: 0.370, pos: [-3.05, 0.62, -0.05], look: [-4.6, 0.1, -1.0], fov: 50 }, // down the aisle, then step into the seat
-  { p: 0.405, pos: [-2.95, 0.5, -0.55], look: [-4.2, 0.1, -1.36], fov: 50 },
+  { p: 0.405, pos: [-3.1, 0.82, -0.06], look: [-4.5, 0.02, -1.25], fov: 62 }, // from the aisle, behind the seat — as in Boom's render
 
   // 05 — Airframe: rise through the ceiling as the aircraft comes apart.
   { p: 0.430, pos: [-3.6, 2.6, 0.8], look: [-3.6, 0.0, 0.0], fov: 46 },
