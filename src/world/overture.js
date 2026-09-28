@@ -292,9 +292,9 @@ export function createOverture(renderer) {
     // shark-fin profile: a long shallow dorsal fillet that steepens (concave leading edge),
     // a short flat tip, and a near-vertical trailing edge ending ahead of the tail blade
     const finGeo = liftingSurface({
-      z0: 0.3, z1: 5.3,
-      le: [[0.3, 16.8], [1.2, 20.6], [2.2, 23.2], [3.3, 24.9], [4.3, 25.9], [5.3, 26.4]],
-      te: [[0.3, 28.3], [5.3, 27.9]],
+      z0: 0.3, z1: 4.3,
+      le: [[0.3, 16.8], [1.05, 20.6], [1.85, 23.2], [2.75, 24.9], [3.55, 25.8], [4.3, 26.15]],
+      te: [[0.3, 28.3], [4.3, 27.95]],
       t0: 0.5, t1: 0.06, yAt: () => 0, nu: 40, nw: 48,
     });
     finGeo.rotateX(-Math.PI / 2);

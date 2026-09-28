@@ -240,9 +240,9 @@ export function tailLivery(renderer) {
   const pv = (y) => ((y - FIN_UV.y0) / FIN_UV.size) * S;
   ctx.save();
   // large, and clipped by the fin's edges — as painted on the aircraft
-  ctx.translate(px(26.1), pv(3.0));
+  ctx.translate(px(26.2), pv(2.55));
   ctx.scale(1, -1); // canvas y (= v) runs upward on the fin; drawPhoenix draws y-up itself
-  drawPhoenix(ctx, 0, 0, 2.6 / FIN_UV.size * S, 'rgb(236,238,241)', `rgb(${INK.join(',')})`);
+  drawPhoenix(ctx, 0, 0, 2.3 / FIN_UV.size * S, 'rgb(236,238,241)', `rgb(${INK.join(',')})`);
   ctx.restore();
   return canvasTexture(c, renderer);
 }
