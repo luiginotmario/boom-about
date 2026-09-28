@@ -29,9 +29,9 @@ const tailBottom = (s) => -R * SY + (R * SY + TAIL_BOTTOM) * Math.pow(s, 1.25);
 // Half-width of the fuselage (z).
 export function radiusAt(x) {
   if (x < CABIN_START) {
-    // long needle nose
+    // nose cone
     const s = (x - NOSE) / (CABIN_START - NOSE);
-    return R * Math.pow(Math.sin(s * Math.PI / 2), 1.45);
+    return R * Math.pow(Math.sin(s * Math.PI / 2), 0.95); // near-conical, as on Boom’s renders
   }
   if (x > CABIN_END) return R * (1 - 0.8 * Math.pow(tailS(x), 1.5));
   // area-ruled waist where the wing is thickest
