@@ -126,9 +126,9 @@ function seatParts() {
   const cap = (z) => new THREE.CylinderGeometry(0.015, 0.015, 0.026, 16).translate(0.648, 0.83 + 0.24, z);
   const bottles = mergeGeometries([bottle(0.455), bottle(0.545)]);
   const caps = mergeGeometries([cap(0.455), cap(0.545)]);
-  const lamp = new THREE.BoxGeometry(0.07, 0.012, 0.09).translate(0.605, 1.14, 0.5);
+  const lamp = new THREE.CylinderGeometry(0.018, 0.022, 0.01, 24).translate(0.6, 1.135, 0.5); // small round downlight
   // the soft pool the lamp throws on the shell behind the bottles
-  const pool = new THREE.PlaneGeometry(0.3, 0.44).rotateY(Math.PI / 2).translate(0.586, 0.96, 0.5);
+  const pool = new THREE.PlaneGeometry(0.3, 0.46).rotateY(Math.PI / 2).translate(0.586, 0.9, 0.5); // apex at the lamp
 
   // Suite partition: the shell carries on past the screen as a tall curved wall that closes
   // the window side all the way to the cabin wall — each seat becomes a private suite.
@@ -181,17 +181,29 @@ function mirrorZ(geometry) {
   return g;
 }
 
-// Warm falloff for the reading lamp's pool of light: brightest just under the lamp.
+// Warm spill from the reading lamp: a narrow cone of light fanning down from a point,
+// fading to nothing well inside the texture so no edge of the plane can show.
 function lampPoolTexture() {
+  const W = 128, H = 256;
   const c = document.createElement('canvas');
-  c.width = 128; c.height = 192;
+  c.width = W; c.height = H;
   const ctx = c.getContext('2d');
-  const g = ctx.createRadialGradient(64, 18, 4, 64, 60, 120);
-  g.addColorStop(0, 'rgba(255,214,160,0.55)');
-  g.addColorStop(0.45, 'rgba(255,200,140,0.18)');
-  g.addColorStop(1, 'rgba(255,190,130,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 128, 192);
+  const img = ctx.createImageData(W, H);
+  const apexY = 6;
+  for (let y = 0; y < H; y++) {
+    const d = (y - apexY) / (H - apexY);                 // 0 at the lamp → 1 at the bottom
+    if (d <= 0) continue;
+    const halfWidth = 0.12 + d * 0.75;                    // the cone widens as it falls
+    const along = Math.pow(1 - d, 1.6);                   // dimmer further from the lamp
+    for (let x = 0; x < W; x++) {
+      const u = Math.abs((x + 0.5) / W - 0.5) * 2 / halfWidth; // 0 centre → 1 cone edge
+      const across = Math.max(0, 1 - u * u);
+      const a = Math.pow(across, 1.5) * along * Math.min(1, d * 12) * 0.55;
+      const k = (y * W + x) * 4;
+      img.data[k] = 255; img.data[k + 1] = 210; img.data[k + 2] = 150; img.data[k + 3] = Math.round(a * 255);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
