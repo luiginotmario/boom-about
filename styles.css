@@ -7,7 +7,7 @@
   --glass: rgba(4, 10, 22, 0.38);
   --gutter: clamp(20px, 4vw, 56px);
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --font: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Helvetica Neue", Arial, sans-serif;
   color-scheme: dark;
 }
 
@@ -131,7 +131,9 @@ html.ready .loader { opacity: 0; visibility: hidden; }
 }
 .hud-progress i { position: absolute; inset: 0; background: var(--yellow); transform-origin: 0 50%; transform: scaleX(0); }
 
-/* ── chapter rail ───────────────────────────────────────────────────── */
+/* ── chapter rail ───────────────────────────────────────────────────────
+   At rest only the current chapter shows. Hovering the rail reveals every number;
+   hovering a number reveals its name. Numbers sit in one fixed, right-aligned column. */
 .rail {
   position: fixed;
   z-index: 10;
@@ -139,29 +141,55 @@ html.ready .loader { opacity: 0; visibility: hidden; }
   top: 50%;
   transform: translateY(-50%);
   display: grid;
+  justify-items: end;
   gap: 2px;
+  padding-left: 140px; /* hover target wide enough to reach the labels */
 }
 .rail-item {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
+  position: relative;
+  display: block;
   padding: 5px 8px;
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--faint);
-  transition: color 160ms ease, transform 160ms var(--ease-out);
+  opacity: 0;
+  transition: opacity 200ms var(--ease-out), color 160ms ease, transform 160ms var(--ease-out);
 }
 .rail-item:active { transform: scale(0.97); }
-.rail-num { font-variant-numeric: tabular-nums; }
-.rail-label { opacity: 0; transform: translateX(6px); transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }
-.rail-item[aria-current] { color: var(--yellow); }
-.rail-item[aria-current] .rail-label { opacity: 1; transform: none; }
+.rail-num { display: block; width: 2.4ch; text-align: right; font-variant-numeric: tabular-nums; }
+.rail-label {
+  position: absolute;
+  right: calc(100% - 2px);
+  top: 50%;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(6px, -50%);
+  transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+  pointer-events: none;
+}
+.rail-item[aria-current] { opacity: 1; color: var(--yellow); }
+.rail-item[aria-current] .rail-label { opacity: 1; transform: translate(0, -50%); }
+.rail:focus-within .rail-item { opacity: 1; }
 .rail-item:focus-visible { outline: 1px solid var(--yellow); outline-offset: 2px; border-radius: 6px; }
+.rail-item:focus-visible .rail-label { opacity: 1; transform: translate(0, -50%); }
 @media (hover: hover) and (pointer: fine) {
+  .rail:hover .rail-item { opacity: 1; }
   .rail-item:hover { color: var(--ink); }
-  .rail-item:hover .rail-label { opacity: 1; transform: none; }
+  .rail-item:hover .rail-label { opacity: 1; transform: translate(0, -50%); }
+  /* while browsing the list, only the hovered item names itself */
+  .rail:hover .rail-item[aria-current]:not(:hover) .rail-label { opacity: 0; }
+}
+
+/* ── hero scrim: lifts the white hero copy off the bright cloud deck ── */
+.hero-scrim {
+  position: fixed;
+  inset: auto 0 0 0;
+  height: 62vh;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(2, 8, 22, 0.55), rgba(2, 8, 22, 0.28) 45%, transparent);
+  will-change: opacity;
 }
 
 /* ── scroll cue ─────────────────────────────────────────────────────── */

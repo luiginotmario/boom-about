@@ -66,6 +66,7 @@ export function createUI({ onJump }) {
   };
   const numbers = caps.get('numbers')?.el;
   const cue = document.querySelector('.scroll-cue');
+  const scrim = document.querySelector('.hero-scrim');
 
   // 3D-anchored labels: { el, anchor: Vector3 | () => Vector3, visible: (p, s) => 0..1 }
   const labels = [];
@@ -91,6 +92,7 @@ export function createUI({ onJump }) {
     }
     if (numbers) numbers.classList.toggle('rolled', windowed(caps.get('numbers').w, p) > 0.6);
     if (cue) cue.style.opacity = (1 - smooth(0.0, 0.03, p)).toFixed(3);
+    if (scrim) scrim.style.opacity = (1 - smooth(0.0, 0.05, p)).toFixed(3);
 
     // chapter index = last chapter whose window has started
     let idx = 0;
