@@ -97,7 +97,6 @@ function seatParts() {
     box(0.42, 1.02, 0.12, 0.3, 0.51, -0.37, 0.05),    // aisle wrap, tall at the back (thicker than the wing: no z-fighting)
     box(0.95, 0.62, 0.07, 0.02, 0.31, -0.37, 0.03),   // aisle-side wing
     box(0.95, 0.56, 0.26, 0.05, 0.28, 0.43, 0.04),    // console base
-    box(0.3, 0.46, 0.2, 0.42, 0.95, 0.5, 0.05),       // shell wing by the window
     box(0.13, 0.02, 0.2, 0.645, 0.82, 0.5, 0.008),    // bottle shelf beside the screen
     box(0.34, 0.34, 0.44, -0.52, 0.17, 0.06, 0.06),   // ottoman
     box(0.44, 0.012, 0.5, -0.78, 0.642, 0.02, 0.005), // tablecloth
@@ -129,17 +128,42 @@ function seatParts() {
   const caps = mergeGeometries([cap(0.455), cap(0.545)]);
   const lamp = new THREE.BoxGeometry(0.07, 0.012, 0.09).translate(0.605, 1.14, 0.5);
   // the soft pool the lamp throws on the shell behind the bottles
-  const pool = new THREE.PlaneGeometry(0.3, 0.44).rotateY(Math.PI / 2).translate(0.578, 0.96, 0.5);
-  return { shell, leather, head, walnut, screen, bottles, caps, lamp, pool };
+  const pool = new THREE.PlaneGeometry(0.3, 0.44).rotateY(Math.PI / 2).translate(0.586, 0.96, 0.5);
+
+  // Suite partition: the shell carries on past the screen as a tall curved wall that closes
+  // the window side all the way to the cabin wall — each seat becomes a private suite.
+  const outline = new THREE.Shape();
+  outline.moveTo(0.34, 0);
+  outline.lineTo(0.34, 1.16);
+  outline.bezierCurveTo(0.34, 1.3, 0.5, 1.38, 0.66, 1.42);
+  outline.lineTo(0.9, 1.46);
+  outline.lineTo(0.9, 0);
+  outline.closePath();
+  const partition = new THREE.ExtrudeGeometry(outline, {
+    depth: 0.12, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 3, curveSegments: 24,
+  });
+  partition.rotateY(-Math.PI / 2).translate(0.56, 0, 0); // shape x → z, extrusion → −x
+  return { shell, leather, head, walnut, screen, bottles, caps, lamp, pool, partition };
 }
 
 function mirrorZ(geometry) {
   const g = geometry.clone();
   g.scale(1, 1, -1);
+  // a mirror flips winding: swap the 2nd and 3rd vertex of every triangle
   const idx = g.getIndex();
   if (idx) {
     const a = idx.array;
     for (let i = 0; i < a.length; i += 3) { const t = a[i + 1]; a[i + 1] = a[i + 2]; a[i + 2] = t; }
+  } else {
+    for (const attr of Object.values(g.attributes)) {
+      const n = attr.itemSize, arr = attr.array;
+      for (let v = 0; v < attr.count; v += 3) {
+        for (let k = 0; k < n; k++) {
+          const i1 = (v + 1) * n + k, i2 = (v + 2) * n + k;
+          const t = arr[i1]; arr[i1] = arr[i2]; arr[i2] = t;
+        }
+      }
+    }
   }
   g.computeVertexNormals();
   return g;
@@ -253,11 +277,13 @@ export function createCabin(renderer) {
       color: 0xe4eef0, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.45, depthWrite: false, envMapIntensity: 1.6,
     }),
     caps: new THREE.MeshStandardMaterial({ color: 0xc9ccd0, metalness: 1, roughness: 0.3 }),
+    partition: null, // shares the shell material (set below)
     lamp: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.86, 0.66).multiplyScalar(3) }),
     pool: new THREE.MeshBasicMaterial({
       map: lampPoolTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
     }),
   };
+  mats.partition = mats.shell;
   const m4 = new THREE.Matrix4();
   for (const side of [1, -1]) {
     for (const key of Object.keys(parts)) {
