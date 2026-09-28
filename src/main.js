@@ -250,7 +250,9 @@ function frame(dt) {
 
   ui.update(p, s, camera, width, height);
 
-  post.setAO(s.xray < 0.01 && s.dim < 0.01 && s.night < 0.01, 2.2 + (0.45 - 2.2) * s.cabin);
+  // AO eases out over the first part of the x-ray / studio / night transitions instead of popping off
+  const aoWeight = (1 - smooth(0, 0.3, s.xray)) * (1 - smooth(0, 0.3, s.dim)) * (1 - smooth(0, 0.3, s.night));
+  post.setAO(aoWeight, 2.2 + (0.45 - 2.2) * s.cabin);
   post.setTime(elapsed);
   post.composer.render(dt);
 }

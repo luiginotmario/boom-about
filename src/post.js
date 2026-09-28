@@ -80,11 +80,12 @@ export function createComposer(renderer, scene, camera, { mobile, aoHidden = [] 
     composer,
     bloom,
     setTime(t) { finish.uniforms.uTime.value = t; },
-    // AO radius is in metres: wide for the airframe, tight for the cabin
-    setAO(enabled, radius) {
+    // AO fades rather than switching (weight 0…1); radius is in metres: wide for the airframe, tight for the cabin
+    setAO(weight, radius) {
       if (!ao) return;
-      ao.enabled = enabled;
-      if (enabled && Math.abs(radius - aoRadius) > 0.05) {
+      ao.enabled = weight > 0.001;
+      ao.blendIntensity = weight;
+      if (ao.enabled && Math.abs(radius - aoRadius) > 0.05) {
         aoRadius = radius;
         ao.updateGtaoMaterial({ radius, distanceExponent: 1, thickness: radius * 1.2, scale: 1.5, samples: 16 });
       }

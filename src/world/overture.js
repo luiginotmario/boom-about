@@ -224,6 +224,10 @@ export function createOverture(renderer) {
     color: 0xfff555, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
   });
   const skins = [paint, white, cowlMat, fin, metal, dark, heroNacelle, heroDuct];
+  const paintInner = withWindows(skinMaterial({
+    map: livery.map, roughnessMap: livery.roughnessMap, roughness: 1, side: THREE.BackSide, depthWrite: false,
+  }));
+  const innerSkins = [];
 
   const parts = []; // { obj, explode: Vector3 }
   const part = (name, explode) => {
@@ -244,8 +248,15 @@ export function createOverture(renderer) {
   const sectionGroups = {};
   for (const s of sections) {
     const g = part(s.name, s.explode);
-    const skin = new THREE.Mesh(bodyGeometry(s.x0, s.x1, s.seg, 160), paint);
+    const geo = bodyGeometry(s.x0, s.x1, s.seg, 160);
+    const skin = new THREE.Mesh(geo, paint);
     skin.renderOrder = 2;
+    // inner faces, only for the x-ray view: a separate layer that fades in with it
+    const inner = new THREE.Mesh(geo, paintInner);
+    inner.renderOrder = 1;
+    inner.visible = false;
+    innerSkins.push(inner);
+    g.add(inner);
     g.add(skin, new THREE.LineSegments(structureLines(s.x0, s.x1), lines));
     sectionGroups[s.name] = g;
   }
@@ -373,7 +384,11 @@ export function createOverture(renderer) {
       m.depthWrite = solid > 0.98;
       m.emissive.setScalar(0.22 * s.xray); // ghosted parts glow faintly against the dark studio
     }
-    paint.side = s.xray > 0.01 ? THREE.DoubleSide : THREE.FrontSide;
+    // inner faces fade in only once the skin is already translucent — never a one-frame pop
+    const innerOpacity = solid * THREE.MathUtils.smoothstep(s.xray, 0.35, 0.9);
+    paintInner.opacity = innerOpacity;
+    paintInner.emissive.setScalar(0.22 * s.xray);
+    for (const m of innerSkins) m.visible = innerOpacity > 0.002;
     lines.opacity = s.xray * 0.6 * (1 - s.macro);
     glassMat.opacity = 0.85 * s.glass;
     glass.visible = s.glass > 0.001;
