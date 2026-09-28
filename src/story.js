@@ -42,9 +42,9 @@ export const SHOTS = [
 
   // 08 — Symphony: pull all the way back out as the aircraft reassembles, swing to an engine.
   { p: 0.686, pos: [-8, 4, 29], look: [8, -1.8, 8.6], fov: 34 },
-  { p: 0.705, pos: [17.2, -3.0, 19.8], look: [20.2, -2.3, 8.6], fov: 32 },
-  { p: 0.742, pos: [15.0, -2.9, 15.4], look: [19.6, -2.3, 8.6], fov: 32 },
-  { p: 0.780, pos: [22.8, -2.7, 17.6], look: [20.0, -2.3, 8.6], fov: 32 },
+  { p: 0.705, pos: [13.5, -3.3, 23.5], look: [18.0, -2.3, 8.6], fov: 32 },
+  { p: 0.742, pos: [10.2, -3.2, 19.0], look: [16.8, -2.3, 8.6], fov: 32 },
+  { p: 0.780, pos: [19.5, -3.0, 22.0], look: [17.4, -2.3, 8.6], fov: 32 },
 
   // 09 — Mach: back out wide, watch the shock cone form and sharpen.
   { p: 0.805, pos: [6, 5, 58], look: [0.0, 0.0, 0.0], fov: 32 },

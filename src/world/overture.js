@@ -81,19 +81,20 @@ function lathe(points, segments = 96) {
 function nacelleGeometries() {
   const L = NACELLE.length, R = NACELLE.radius;
   const f = (t) => t * L; // profile stations as fractions of the nacelle length
+  // long cowl: sharp inlet lip, parallel body, gentle boat-tail to a blunt nozzle
   const cowl = lathe([
-    [R * 0.84, 0], [R * 0.9, f(0.008)], [R * 0.96, f(0.04)], [R, f(0.12)], [R, f(0.58)], [R * 0.97, f(0.75)],
-    [R * 0.9, f(0.88)], [R * 0.8, L],
+    [R * 0.86, 0], [R * 0.92, f(0.006)], [R * 0.97, f(0.03)], [R, f(0.1)], [R, f(0.7)], [R * 0.97, f(0.86)],
+    [R * 0.9, f(0.96)], [R * 0.86, L],
   ]);
   const duct = lathe([
-    [R * 0.84, 0], [R * 0.8, f(0.03)], [R * 0.79, f(0.14)], [R * 0.78, f(0.7)], [R * 0.73, f(0.9)], [R * 0.78, L],
+    [R * 0.86, 0], [R * 0.82, f(0.03)], [R * 0.8, f(0.12)], [R * 0.79, f(0.8)], [R * 0.8, L],
   ]);
-  // exhaust plug: sits in the nozzle and pokes just past the lip
-  const spike = new THREE.ConeGeometry(R * 0.42, 1.5, 64).rotateZ(-Math.PI / 2).translate(L + 0.2, 0, 0);
-  const plugBase = new THREE.CylinderGeometry(R * 0.42, R * 0.42, 0.8, 64).rotateZ(-Math.PI / 2).translate(L - 0.95, 0, 0);
-  // fan spinner, visible down the intake
-  const spinner = new THREE.ConeGeometry(R * 0.3, 0.7, 48).rotateZ(Math.PI / 2).translate(0.85, 0, 0);
-  return { cowl, duct, spike, plugBase, spinner };
+  // supersonic inlet spike: a cone that pokes forward out of the intake
+  const spike = new THREE.ConeGeometry(R * 0.5, 2.0, 64).rotateZ(Math.PI / 2).translate(-0.35, 0, 0);
+  const spikeBody = new THREE.CylinderGeometry(R * 0.42, R * 0.5, 1.4, 64).rotateZ(-Math.PI / 2).translate(1.35, 0, 0); // widest where it meets the cone
+  // exhaust plug, recessed inside the blunt nozzle
+  const plugBase = new THREE.ConeGeometry(R * 0.4, 1.4, 48).rotateZ(-Math.PI / 2).translate(L - 0.9, 0, 0);
+  return { cowl, duct, spike, spikeBody, plugBase };
 }
 
 // Blueprint structure lines: frames and stringers inside a fuselage section.
@@ -301,7 +302,7 @@ export function createOverture(renderer) {
   // Four Symphony nacelles, hung under the gull wing.
   const nac = nacelleGeometries();
   const intakeGeo = new THREE.CircleGeometry(NACELLE.radius * 0.8, 64).rotateY(-Math.PI / 2);
-  const pylonGeo = new THREE.BoxGeometry(NACELLE.length * 0.62, 0.4, 0.16);
+  const pylonGeo = new THREE.BoxGeometry(NACELLE.length * 0.7, 0.24, 0.18);
   let heroEngine = null;
   wingGroups.forEach((wingGroup, wi) => {
     const side = wi === 0 ? 1 : -1;
@@ -313,15 +314,15 @@ export function createOverture(renderer) {
       const shell = new THREE.Mesh(nac.cowl, isHero ? heroNacelle : cowlMat);
       const duct = new THREE.Mesh(nac.duct, isHero ? heroDuct : metal);
       const spike = new THREE.Mesh(nac.spike, metal);
+      const spikeBody = new THREE.Mesh(nac.spikeBody, metal);
       const plug = new THREE.Mesh(nac.plugBase, metal);
       const intake = new THREE.Mesh(intakeGeo, dark);
       intake.position.x = 1.0;
-      const spinner = new THREE.Mesh(nac.spinner, metal);
       const pylon = new THREE.Mesh(pylonGeo, cowlMat);
-      pylon.position.set(NACELLE.length * 0.55, NACELLE.radius + 0.16, 0);
-      holder.add(shell, duct, spike, plug, pylon, spinner);
+      pylon.position.set(NACELLE.length * 0.5, NACELLE.radius + 0.08, 0);
+      holder.add(shell, duct, spike, spikeBody, plug, pylon);
       if (!isHero) holder.add(intake);
-      else heroEngine = { holder, intake, spinner, clipPlanes: null };
+      else heroEngine = { holder, intake, clipPlanes: null };
       wingGroup.add(holder);
       // engines drop further out of the wing when exploded
       parts.push({ obj: holder, explode: new THREE.Vector3(1.0, -2.2, 0.9 * side * (ei + 1)), base: holder.position.clone() });
@@ -376,7 +377,7 @@ export function createOverture(renderer) {
     // Nacelle cutaway: a plane sweeps in from the camera side to the engine axis.
     heroEngine.holder.getWorldPosition(tmp);
     clipPlane.constant = tmp.z + (1 - s.cutaway) * 1.2 + 0.001;
-    heroEngine.intake.visible = heroEngine.spinner.visible = s.cutaway < 0.02;
+    heroEngine.intake.visible = s.cutaway < 0.02;
   }
 
   return { root, update, sectionGroups, heroEngine, heroGlass: glass };

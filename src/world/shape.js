@@ -88,11 +88,13 @@ export function wingLowerY(x, z) {
   return wingYAt(z) - wingHalfThickness(z, u);
 }
 
-// Four Symphony engines spread along the span — inboard at about a third of the semispan,
-// outboard just past half — hung on short pylons under the wing, ahead of the trailing edge.
-export const NACELLE = { length: 6.4, radius: 0.68 };
-export const ENGINES = [[5.0, 14.8], [8.6, 15.2]].map(([z, x0]) => ({
-  z,
-  x0,
-  y: wingLowerY(x0 + 3.2, z) - NACELLE.radius - 0.14,
-}));
+// Four Symphony engines spread along the span (inboard at about a third of the semispan,
+// outboard just past half). Long nacelles tucked tight under the wing, from near the leading
+// edge to just ahead of the trailing edge, with the supersonic inlet spike pointing forward.
+export const NACELLE = { length: 11.0, radius: 0.74 };
+export const ENGINES = [[5.0, 7.8], [8.6, 9.6]].map(([z, x0]) => {
+  // hang each nacelle just clear of the wing's lowest point along its length
+  let lowest = Infinity;
+  for (let x = x0; x <= x0 + NACELLE.length; x += 0.25) lowest = Math.min(lowest, wingLowerY(x, z));
+  return { z, x0, y: lowest - NACELLE.radius - 0.05 };
+});

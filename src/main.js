@@ -77,7 +77,8 @@ const cabin = createCabin(renderer);
 scene.add(cabin.root);
 const symphony = createSymphony(overture.heroEngine.clipPlanes);
 overture.heroEngine.holder.add(symphony.root);
-symphony.root.scale.setScalar(NACELLE.length / 8.6); // internals are modelled for an 8.6 m nacelle
+// internals are modelled for an 8.6 m × 0.72 m nacelle: stretch along the axis, keep the section
+symphony.root.scale.set(NACELLE.length / 8.6, NACELLE.radius / 0.72, NACELLE.radius / 0.72);
 // neutral studio reflections for the macro shots (the sky would mirror in the glossy plies)
 const pmrem = new THREE.PMREMGenerator(renderer);
 const studioEnv = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -143,7 +144,7 @@ for (const [key, obj, local] of tagSpecs) {
 for (const [key, local] of Object.entries(symphony.anchors)) {
   const el = document.querySelector(`[data-tag="${key}"]`);
   const w = chapterW('symphony');
-  const scaled = local.clone().multiplyScalar(symphony.root.scale.x);
+  const scaled = local.clone().multiply(symphony.root.scale);
   ui.addLabel(el, anchored(overture.heroEngine.holder, scaled), (p) => windowed([w[0] + 0.01, w[1] + 0.01, w[2], w[3]], p));
 }
 for (const [key, pos] of Object.entries(cabin.hotspots)) {
