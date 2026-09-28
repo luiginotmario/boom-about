@@ -1,9 +1,10 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {
   NOSE, TAIL, LENGTH, SY, radiusAt, halfHeightAt, centerYAt, WINDOW, HERO_WINDOW_X,
   ENGINES, NACELLE, WING, piecewise, wingYAt,
 } from './shape.js';
-import { fuselageLivery, tailLivery, wingBump, FIN_UV } from './livery.js';
+import { fuselageLivery, tailLivery, wingBump } from './livery.js';
 
 // ── geometry builders ───────────────────────────────────────────────────
 
@@ -37,64 +38,39 @@ export function bodyGeometry(x0, x1, segments, radial, radiusFn = radiusAt, cent
   return g;
 }
 
-// A wing-like surface: span along +Z (or −Z), biconvex section, cosine chord spacing.
-function liftingSurface({ z0, z1, le, te, t0, t1, yAt, side = 1, nu = 36, nw = 40 }) {
-  const pos = [], uv = [], idx = [];
-  const row = nu + 1;
-  for (const s of [1, -1]) {
-    const base = pos.length / 3;
-    for (let iw = 0; iw <= nw; iw++) {
-      const w = iw / nw;
-      const z = z0 + (z1 - z0) * w;
-      const xl = piecewise(le, z), xt = piecewise(te, z);
-      const tm = t0 + (t1 - t0) * w;
-      for (let iu = 0; iu <= nu; iu++) {
-        const u = 0.5 - 0.5 * Math.cos((Math.PI * iu) / nu);
-        const half = (tm / 2) * Math.pow(Math.max(0, 1 - (2 * u - 1) ** 2), 0.7);
-        pos.push(xl + (xt - xl) * u, yAt(z) + s * half, z * side);
-        uv.push(u, w);
-      }
-    }
-    const flip = (s < 0) !== (side < 0);
-    for (let iw = 0; iw < nw; iw++) {
-      for (let iu = 0; iu < nu; iu++) {
-        const a = base + iw * row + iu, b = a + row, c = a + 1, d = b + 1;
-        if (flip) idx.push(a, c, b, c, d, b);
-        else idx.push(a, b, c, c, b, d);
-      }
-    }
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  g.setIndex(idx);
-  g.computeVertexNormals();
-  return g;
+// ── the Blender airframe ────────────────────────────────────────────────
+// models/overture.glb is built by blender/build_overture.py from the same mould lines as
+// shape.js, in page coordinates, left-side parts only. UV0 follows the page's conventions
+// (glTF stores V flipped, so it's flipped back here); UV1 carries the baked ambient occlusion.
+const MODEL_URL = new URL('../../models/overture.glb', import.meta.url).href;
+const AO_URL = (name) => new URL(`../../models/ao/${name}.png`, import.meta.url).href;
+
+async function loadAirframe() {
+  const gltf = await new GLTFLoader().loadAsync(MODEL_URL);
+  const geos = {};
+  gltf.scene.traverse((o) => {
+    if (!o.isMesh) return;
+    const g = o.geometry;
+    const uv = g.attributes.uv;
+    if (uv) for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
+    geos[o.name] = g;
+  });
+  return geos;
 }
 
-// Nacelle in two lathes: painted outer cowl, bare-metal duct and nozzle inside.
-function lathe(points, segments = 96) {
-  const g = new THREE.LatheGeometry(points.map(([r, y]) => new THREE.Vector2(r, y)), segments);
-  g.rotateZ(-Math.PI / 2); // lathe axis Y → X, intake forward (−X)
-  return g;
-}
-function nacelleGeometries() {
-  const L = NACELLE.length, R = NACELLE.radius;
-  const f = (t) => t * L; // profile stations as fractions of the nacelle length
-  // long cowl: sharp inlet lip, parallel body, gentle boat-tail to a blunt nozzle
-  const cowl = lathe([
-    [R * 0.86, 0], [R * 0.92, f(0.006)], [R * 0.97, f(0.03)], [R, f(0.1)], [R, f(0.7)], [R * 0.97, f(0.86)],
-    [R * 0.9, f(0.96)], [R * 0.86, L],
-  ]);
-  const duct = lathe([
-    [R * 0.86, 0], [R * 0.82, f(0.03)], [R * 0.8, f(0.12)], [R * 0.79, f(0.8)], [R * 0.8, L],
-  ]);
-  // supersonic inlet spike: a cone that pokes forward out of the intake
-  const spike = new THREE.ConeGeometry(R * 0.5, 2.0, 64).rotateZ(Math.PI / 2).translate(-0.35, 0, 0);
-  const spikeBody = new THREE.CylinderGeometry(R * 0.42, R * 0.5, 1.4, 64).rotateZ(-Math.PI / 2).translate(1.35, 0, 0); // widest where it meets the cone
-  // exhaust plug, recessed inside the blunt nozzle
-  const plugBase = new THREE.ConeGeometry(R * 0.4, 1.4, 48).rotateZ(-Math.PI / 2).translate(L - 0.9, 0, 0);
-  return { cowl, duct, spike, spikeBody, plugBase };
+async function loadAO(names) {
+  const loader = new THREE.TextureLoader();
+  const out = {};
+  await Promise.all(names.map(async (n) => {
+    try {
+      const t = await loader.loadAsync(AO_URL(n));
+      t.flipY = false;               // glTF UV convention
+      t.channel = 1;                 // UV1: the lightmap unwrap
+      t.colorSpace = THREE.NoColorSpace;
+      out[n] = t;
+    } catch { /* not baked yet: render without it */ }
+  }));
+  return out;
 }
 
 // Blueprint structure lines: frames and stringers inside a fuselage section.
@@ -202,32 +178,63 @@ function withWindows(material) {
 
 // ── the aircraft ────────────────────────────────────────────────────────
 
-export function createOverture(renderer) {
+export async function createOverture(renderer) {
+  const [geo, ao] = await Promise.all([
+    loadAirframe(),
+    loadAO(['fuselage', 'wing', 'elevons', 'fairing', 'stabilizer', 'fin', 'nacelle', 'pylon']),
+  ]);
   const root = new THREE.Group();
   root.name = 'overture';
+  const withAO = (m, key) => {
+    if (ao[key]) { m.aoMap = ao[key]; m.aoMapIntensity = 1; }
+    return m;
+  };
 
   const livery = fuselageLivery(renderer);
-  const paint = withWindows(skinMaterial({
+  const paint = withAO(withWindows(skinMaterial({
     map: livery.map, roughnessMap: livery.roughnessMap, roughness: 1, bumpMap: livery.bumpMap, bumpScale: 3,
-  }));
+  })), 'fuselage');
   const PAINT_WHITE = 0xe3e6ea; // real white topcoat, not an albedo of 1.0
-  const white = skinMaterial({
-    color: PAINT_WHITE, roughness: 0.4, clearcoatRoughness: 0.14, bumpMap: wingBump(renderer), bumpScale: 3, side: THREE.DoubleSide,
-  });
-  const cowlMat = skinMaterial({ color: PAINT_WHITE, roughness: 0.3 });
-  const fin = skinMaterial({ map: tailLivery(renderer), roughness: 0.28, side: THREE.DoubleSide });
+  const panels = wingBump(renderer);
+  const whiteSkin = (key) => withAO(skinMaterial({
+    color: PAINT_WHITE, roughness: 0.4, clearcoatRoughness: 0.14, bumpMap: panels, bumpScale: 3,
+  }), key);
+  const wingMat = whiteSkin('wing');
+  const elevonMat = whiteSkin('elevons');
+  const fairingMat = withAO(skinMaterial({ color: PAINT_WHITE, roughness: 0.4, clearcoatRoughness: 0.14 }), 'fairing');
+  const stabMat = whiteSkin('stabilizer');
+  const cowlMat = withAO(skinMaterial({ color: PAINT_WHITE, roughness: 0.3 }), 'nacelle');
+  const pylonMat = withAO(skinMaterial({ color: PAINT_WHITE, roughness: 0.34 }), 'pylon');
+  const fin = withAO(skinMaterial({ map: tailLivery(renderer), roughness: 0.28 }), 'fin');
   const metal = new THREE.MeshStandardMaterial({ color: 0x5b5f66, metalness: 1, roughness: 0.34, transparent: true, side: THREE.DoubleSide });
+  const ductMat = withAO(new THREE.MeshStandardMaterial({ color: 0x5b5f66, metalness: 1, roughness: 0.34, transparent: true, side: THREE.DoubleSide }), 'nacelle');
   const dark = new THREE.MeshStandardMaterial({ color: 0x0b0d12, roughness: 0.6, transparent: true, side: THREE.DoubleSide });
-  const heroNacelle = skinMaterial({ color: PAINT_WHITE, roughness: 0.3, side: THREE.DoubleSide, clippingPlanes: [] });
-  const heroDuct = new THREE.MeshStandardMaterial({ color: 0x5b5f66, metalness: 1, roughness: 0.34, transparent: true, side: THREE.DoubleSide, clippingPlanes: [] });
+  const wickMat = new THREE.MeshStandardMaterial({ color: 0x1a1c20, roughness: 0.5, transparent: true });
+  const heroNacelle = withAO(skinMaterial({ color: PAINT_WHITE, roughness: 0.3, side: THREE.DoubleSide, clippingPlanes: [] }), 'nacelle');
+  const heroDuct = withAO(new THREE.MeshStandardMaterial({ color: 0x5b5f66, metalness: 1, roughness: 0.34, transparent: true, side: THREE.DoubleSide, clippingPlanes: [] }), 'nacelle');
   const lines = new THREE.LineBasicMaterial({
     color: 0xfff555, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
   });
-  const skins = [paint, white, cowlMat, fin, metal, dark, heroNacelle, heroDuct];
+  const skins = [paint, wingMat, elevonMat, fairingMat, stabMat, cowlMat, pylonMat, fin, metal, ductMat, dark, wickMat, heroNacelle, heroDuct];
   const paintInner = withWindows(skinMaterial({
     map: livery.map, roughnessMap: livery.roughnessMap, roughness: 1, side: THREE.BackSide, depthWrite: false,
   }));
   const innerSkins = [];
+  // position and anti-collision lights: lit lenses, faded with the skin in the x-ray view
+  const lamp = (color, intensity) => new THREE.MeshStandardMaterial({
+    color: 0x000000, emissive: color, emissiveIntensity: intensity, roughness: 0.2, transparent: true,
+  });
+  const lamps = [lamp(0xff2a1a, 2.2), lamp(0x2aff6a, 2.2), lamp(0xff2a1a, 1.6), lamp(0xffffff, 1.4)];
+  const [navRed, navGreen, beaconMat, tailMat] = lamps;
+
+  const mesh = (name, material) => new THREE.Mesh(geo[name], material);
+  // right-side copy of a left-side part: mirrored across the centre plane
+  const mirrored = (...objs) => {
+    const g = new THREE.Group();
+    g.scale.z = -1;
+    g.add(...objs);
+    return g;
+  };
 
   const parts = []; // { obj, explode: Vector3 }
   const part = (name, explode) => {
@@ -240,19 +247,18 @@ export function createOverture(renderer) {
 
   // Fuselage, split at production joints so it can come apart.
   const sections = [
-    { name: 'nose', x0: NOSE, x1: -13, seg: 110, explode: [-7, 0.6, 0] },
-    { name: 'forward-fuselage', x0: -13, x1: -1, seg: 40, explode: [-2.5, 2.2, 0] },
-    { name: 'aft-fuselage', x0: -1, x1: 12, seg: 40, explode: [2.5, 2.2, 0] },
-    { name: 'tail-cone', x0: 12, x1: TAIL, seg: 70, explode: [8, 1.2, 0] },
+    { name: 'nose', x0: NOSE, x1: -13, explode: [-7, 0.6, 0] },
+    { name: 'forward-fuselage', x0: -13, x1: -1, explode: [-2.5, 2.2, 0] },
+    { name: 'aft-fuselage', x0: -1, x1: 12, explode: [2.5, 2.2, 0] },
+    { name: 'tail-cone', x0: 12, x1: TAIL, explode: [8, 1.2, 0] },
   ];
   const sectionGroups = {};
   for (const s of sections) {
     const g = part(s.name, s.explode);
-    const geo = bodyGeometry(s.x0, s.x1, s.seg, 160);
-    const skin = new THREE.Mesh(geo, paint);
+    const skin = new THREE.Mesh(geo[s.name], paint);
     skin.renderOrder = 2;
     // inner faces, only for the x-ray view: a separate layer that fades in with it
-    const inner = new THREE.Mesh(geo, paintInner);
+    const inner = new THREE.Mesh(geo[s.name], paintInner);
     inner.renderOrder = 1;
     inner.visible = false;
     innerSkins.push(inner);
@@ -260,6 +266,10 @@ export function createOverture(renderer) {
     g.add(skin, new THREE.LineSegments(structureLines(s.x0, s.x1), lines));
     sectionGroups[s.name] = g;
   }
+  // pitot probes and AoA vane on both sides of the nose; beacons on crown and belly; tail light
+  sectionGroups.nose.add(mesh('probes', metal), mirrored(mesh('probes', metal)));
+  sectionGroups['forward-fuselage'].add(mesh('beacons', beaconMat));
+  sectionGroups['tail-cone'].add(mesh('taillight', tailMat));
 
   // Hero window glass — clears as the camera arrives.
   const glassGeo = new THREE.ShapeGeometry(roundedRectShape(WINDOW.hw * 2.02, WINDOW.hh * 2.02, 0.12), 12);
@@ -274,51 +284,34 @@ export function createOverture(renderer) {
   glass.renderOrder = 3;
   sectionGroups['forward-fuselage'].add(glass);
 
-  // Wings (with their engines) — each side is one part.
+  // Wings, with their elevons, wing-root fairing, nav light and static wicks — each side is one part.
   const wingGroups = [];
   for (const side of [1, -1]) {
     const g = part(side > 0 ? 'left-wing' : 'right-wing', [1.5, -2.8, 6 * side]);
-    const wing = liftingSurface({
-      z0: WING.root, z1: WING.tip, le: WING.le, te: WING.te, t0: WING.t0, t1: WING.t1, yAt: wingYAt, side, nu: 56, nw: 96,
-    });
-    g.add(new THREE.Mesh(wing, white), new THREE.LineSegments(wingStructureLines(side), lines));
+    const pieces = [
+      mesh('wing', wingMat), mesh('elevons', elevonMat), mesh('fairing', fairingMat),
+      mesh('navlight', side > 0 ? navRed : navGreen), mesh('wicks', wickMat),
+    ];
+    g.add(side > 0 ? new THREE.Group().add(...pieces) : mirrored(...pieces));
+    g.add(new THREE.LineSegments(wingStructureLines(side), lines));
     wingGroups.push(g);
   }
 
-  // Horizontal stabilisers.
+  // Horizontal stabilisers: mid-set on the tail cone, swept, running aft to the tail tip.
   for (const side of [1, -1]) {
     const g = part(side > 0 ? 'left-stabilizer' : 'right-stabilizer', [9, 0.3, 3.5 * side]);
-    // mid-set on the tail cone, swept, running aft to the tail tip, with a little dihedral
-    const y = centerYAt(27.5);
-    const stab = liftingSurface({
-      z0: 0.2, z1: 5.6, le: [[0.2, 23.8], [5.6, 28.4]], te: [[0.2, 30.3], [5.6, 30.4]],
-      t0: 0.26, t1: 0.03, yAt: (z) => y + 0.06 * z, side, nu: 32, nw: 32,
-    });
-    g.add(new THREE.Mesh(stab, white));
+    const stab = mesh('stabilizer', stabMat);
+    g.add(side > 0 ? stab : mirrored(stab));
   }
 
-  // Vertical fin (built flat, then stood up: span Z → Y).
+  // Vertical fin and rudder (shark-fin profile; isotropic livery UVs in metres).
   {
     const g = part('fin', [10, 5.5, 0]);
-    // shark-fin profile: a long shallow dorsal fillet that steepens (concave leading edge),
-    // a short flat tip, and a near-vertical trailing edge ending ahead of the tail blade
-    const finGeo = liftingSurface({
-      z0: 0.3, z1: 4.3,
-      le: [[0.3, 16.8], [1.05, 20.6], [1.85, 23.2], [2.75, 24.9], [3.55, 25.8], [4.3, 26.15]],
-      te: [[0.3, 28.3], [4.3, 27.95]],
-      t0: 0.5, t1: 0.06, yAt: () => 0, nu: 40, nw: 48,
-    });
-    finGeo.rotateX(-Math.PI / 2);
-    // Isotropic UVs in metres (u aft, v up) so the livery mark isn't stretched by the taper.
-    const fp = finGeo.attributes.position, fuv = finGeo.attributes.uv;
-    for (let i = 0; i < fp.count; i++) fuv.setXY(i, (fp.getX(i) - FIN_UV.x0) / FIN_UV.size, (fp.getY(i) - FIN_UV.y0) / FIN_UV.size);
-    g.add(new THREE.Mesh(finGeo, fin));
+    g.add(mesh('fin', fin), mesh('rudder', fin));
   }
 
-  // Four Symphony nacelles, hung under the gull wing.
-  const nac = nacelleGeometries();
+  // Four Symphony nacelles, hung under the gull wing on aerofoil pylons.
   const intakeGeo = new THREE.CircleGeometry(NACELLE.radius * 0.8, 64).rotateY(-Math.PI / 2);
-  const pylonGeo = new THREE.BoxGeometry(NACELLE.length * 0.7, 0.24, 0.18);
   let heroEngine = null;
   wingGroups.forEach((wingGroup, wi) => {
     const side = wi === 0 ? 1 : -1;
@@ -327,16 +320,15 @@ export function createOverture(renderer) {
       holder.name = `symphony-${side > 0 ? 'L' : 'R'}${ei + 1}`;
       holder.position.set(e.x0, e.y, e.z * side);
       const isHero = side > 0 && ei === 1; // outboard: nothing between it and the camera
-      const shell = new THREE.Mesh(nac.cowl, isHero ? heroNacelle : cowlMat);
-      const duct = new THREE.Mesh(nac.duct, isHero ? heroDuct : metal);
-      const spike = new THREE.Mesh(nac.spike, metal);
-      const spikeBody = new THREE.Mesh(nac.spikeBody, metal);
-      const plug = new THREE.Mesh(nac.plugBase, metal);
+      const shell = mesh('cowl', isHero ? heroNacelle : cowlMat);
+      const duct = mesh('duct', isHero ? heroDuct : ductMat);
+      const nozzle = mesh('nozzle', isHero ? heroNacelle : cowlMat);
+      const spike = mesh('spike', metal);
+      const plug = mesh('plug', metal);
       const intake = new THREE.Mesh(intakeGeo, dark);
       intake.position.x = 1.0;
-      const pylon = new THREE.Mesh(pylonGeo, cowlMat);
-      pylon.position.set(NACELLE.length * 0.5, NACELLE.radius + 0.08, 0);
-      holder.add(shell, duct, spike, spikeBody, plug, pylon);
+      const pylon = mesh(`pylon${ei + 1}`, pylonMat);
+      holder.add(shell, duct, nozzle, spike, plug, pylon);
       if (!isHero) holder.add(intake);
       else heroEngine = { holder, intake, clipPlanes: null };
       wingGroup.add(holder);
@@ -389,6 +381,7 @@ export function createOverture(renderer) {
     paintInner.opacity = innerOpacity;
     paintInner.emissive.setScalar(0.22 * s.xray);
     for (const m of innerSkins) m.visible = innerOpacity > 0.002;
+    for (const m of lamps) m.opacity = solid;
     lines.opacity = s.xray * 0.6 * (1 - s.macro);
     glassMat.opacity = 0.85 * s.glass;
     glass.visible = s.glass > 0.001;

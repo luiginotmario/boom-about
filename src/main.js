@@ -71,7 +71,7 @@ sun.shadow.normalBias = 0.035;
 sun.shadow.radius = 3;
 scene.add(sun, sun.target);
 
-const overture = createOverture(renderer);
+const overture = await createOverture(renderer);
 scene.add(overture.root);
 const cabin = createCabin(renderer);
 scene.add(cabin.root);
