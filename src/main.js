@@ -10,6 +10,7 @@ import { createComposer } from './post.js';
 import { createUI } from './ui.js';
 import { createSky, bakeEnvironment, loadSkyHdri, setSunElevation, SUN } from './world/sky.js';
 import { createOverture } from './world/overture.js';
+import { NACELLE } from './world/shape.js';
 import { createCabin } from './world/cabin.js';
 import { createSymphony } from './world/symphony.js';
 import { createSiliconRig } from './world/silicon.js';
@@ -28,8 +29,8 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPrefer
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDpr));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.NeutralToneMapping; // Khronos PBR Neutral: true-to-material whites, the product-shot look
-renderer.toneMappingExposure = 0.9;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.92;
 renderer.localClippingEnabled = true;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -76,6 +77,7 @@ const cabin = createCabin(renderer);
 scene.add(cabin.root);
 const symphony = createSymphony(overture.heroEngine.clipPlanes);
 overture.heroEngine.holder.add(symphony.root);
+symphony.root.scale.setScalar(NACELLE.length / 8.6); // internals are modelled for an 8.6 m nacelle
 // neutral studio reflections for the macro shots (the sky would mirror in the glossy plies)
 const pmrem = new THREE.PMREMGenerator(renderer);
 const studioEnv = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -141,7 +143,8 @@ for (const [key, obj, local] of tagSpecs) {
 for (const [key, local] of Object.entries(symphony.anchors)) {
   const el = document.querySelector(`[data-tag="${key}"]`);
   const w = chapterW('symphony');
-  ui.addLabel(el, anchored(overture.heroEngine.holder, local), (p) => windowed([w[0] + 0.01, w[1] + 0.01, w[2], w[3]], p));
+  const scaled = local.clone().multiplyScalar(symphony.root.scale.x);
+  ui.addLabel(el, anchored(overture.heroEngine.holder, scaled), (p) => windowed([w[0] + 0.01, w[1] + 0.01, w[2], w[3]], p));
 }
 for (const [key, pos] of Object.entries(cabin.hotspots)) {
   const el = document.querySelector(`[data-hotspot="${key}"]`);

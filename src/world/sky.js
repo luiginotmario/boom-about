@@ -68,42 +68,16 @@ const fragmentShader = /* glsl */ `
   }
   vec3 toLinear(vec3 c) { return pow(c, vec3(2.2)); }
 
-  // ── Preetham daylight (after three's Sky.js), tuned for thin air at altitude ──
-  uniform float uRayleigh;
-  uniform float uTurbidity;
-  uniform float uSkyGain;
-  const float PI = 3.141592653589793;
-  const vec3 totalRayleigh = vec3(5.804542996261093E-6, 1.3562911419845635E-5, 3.0265902468824876E-5);
-  const vec3 MieConst = vec3(1.8399918514433978E14, 2.7798023919660528E14, 4.0790479543861094E14);
-
-  vec3 atmosphere(vec3 d, bool withSun) {
-    float sunE = 1000.0 * max(0.0, 1.0 - exp(-((1.6110731556870734 - acos(clamp(uSun.y, -1.0, 1.0))) / 1.5)));
-    vec3 betaR = totalRayleigh * uRayleigh;
-    vec3 betaM = 0.434 * (0.2 * uTurbidity * 10E-18) * MieConst * 0.004;
-    float zenith = acos(max(0.0, d.y));
-    float inv = 1.0 / (cos(zenith) + 0.15 * pow(93.885 - zenith * 180.0 / PI, -1.253));
-    vec3 Fex = exp(-(betaR * 8.4E3 * inv + betaM * 1.25E3 * inv));
-    float cosT = dot(d, uSun);
-    float rPhase = 0.05968310365946075 * (1.0 + pow(cosT * 0.5 + 0.5, 2.0));
-    float g = 0.8, g2 = g * g;
-    float mPhase = 0.07957747154594767 * (1.0 - g2) / pow(1.0 - 2.0 * g * cosT + g2, 1.5);
-    vec3 scatter = (betaR * rPhase + betaM * mPhase) / (betaR + betaM);
-    vec3 Lin = pow(sunE * scatter * (1.0 - Fex), vec3(1.5));
-    Lin *= mix(vec3(1.0), pow(sunE * scatter * Fex, vec3(0.5)), clamp(pow(1.0 - uSun.y, 5.0), 0.0, 1.0));
-    vec3 L0 = vec3(0.1) * Fex;
-    if (withSun) L0 += sunE * 19000.0 * Fex * smoothstep(0.99995, 0.99997, cosT);
-    vec3 c = (Lin + L0) * 0.04 + vec3(0.0, 0.0003, 0.00075);
-    return pow(c, vec3(1.0 / 2.4)) * uSkyGain;
-  }
-
-  // Cloud-top density and lighting. Relief comes from the density gradient.
-  float density(vec2 p) {
-    return fbm(p * 0.045 + 7.3) * 0.78 + fbm(p * 0.32) * 0.34;
-  }
-
   void main() {
     vec3 d = normalize(vDir);
-    vec3 col = atmosphere(d, true);
+
+    // deep altitude blue overhead, pale at the limb
+    vec3 zenith  = toLinear(vec3(0.03, 0.1, 0.3));
+    vec3 upper   = toLinear(vec3(0.1, 0.34, 0.72));
+    vec3 horizon = toLinear(vec3(0.78, 0.87, 0.98));
+    float h = clamp(d.y + 0.08, 0.0, 1.0);
+    vec3 col = mix(horizon, upper, smoothstep(0.0, 0.13, h));
+    col = mix(col, zenith, smoothstep(0.13, 0.9, h));
 
     // Earth: ray from (0, R+H, 0) against a sphere of radius R+DECK at the origin.
     float b = (R + H) * d.y;
@@ -114,24 +88,26 @@ const fragmentShader = /* glsl */ `
       if (t > 0.0) {
         vec2 p = vec2(d.x, d.z) * t;
         p.x += uTime * uSpeed;
-        float dn = density(p);
-        float cloud = smoothstep(0.44, 0.64, dn);
-        // detail fades with distance so the far deck doesn't shimmer
-        float e = 0.25 + t * 0.002;
-        vec2 grad = vec2(density(p + vec2(e, 0.0)) - dn, density(p + vec2(0.0, e)) - dn) / e;
-        vec3 n = normalize(vec3(-grad.x * 2.2, 1.0, -grad.y * 2.2));
-        float lambert = max(dot(n, uSun), 0.0);
-        vec3 lit = vec3(1.0, 0.97, 0.93) * (0.25 + 0.95 * lambert);
-        vec3 shade = toLinear(vec3(0.5, 0.58, 0.72)) * 0.8;
-        vec3 cloudCol = mix(shade, lit, smoothstep(0.0, 0.9, lambert + cloud * 0.25));
-        vec3 ocean = toLinear(vec3(0.02, 0.07, 0.16));
-        vec3 surface = mix(ocean, cloudCol, cloud);
-        // aerial perspective toward the horizon colour of this azimuth
-        vec3 hazeCol = atmosphere(normalize(vec3(d.x, 0.0, d.z)), false);
-        float haze = 1.0 - exp(-pow(t * 0.0028, 1.4));
-        col = mix(surface, hazeCol, clamp(haze, 0.0, 1.0));
+        float cover  = fbm(p * 0.045 + 7.3);
+        float detail = fbm(p * 0.32);
+        float cloud = smoothstep(0.44, 0.64, cover * 0.78 + detail * 0.34);
+        float lit = detail - fbm(p * 0.32 + uSun.xz * 0.55);
+        float shade = clamp(0.66 + lit * 3.2, 0.3, 1.08);
+        vec3 ocean = toLinear(vec3(0.03, 0.09, 0.2));
+        vec3 cloudCol = mix(toLinear(vec3(0.46, 0.55, 0.72)), toLinear(vec3(0.97, 0.97, 0.96)), shade);
+        vec3 ground = mix(ocean, cloudCol, cloud);
+        float haze = 1.0 - exp(-pow(t * 0.0026, 1.5));
+        col = mix(ground, toLinear(vec3(0.7, 0.79, 0.92)), clamp(haze, 0.0, 1.0));
       }
     }
+
+    // thin bright limb right at the horizon
+    col += toLinear(vec3(0.9, 0.95, 1.0)) * exp(-abs(d.y + 0.0757) * 70.0) * 0.35;
+
+    #ifndef USE_HDRI
+      float s = max(dot(d, uSun), 0.0);
+      col += vec3(1.0, 0.94, 0.84) * (pow(s, 3000.0) * 60.0 + pow(s, 60.0) * 0.5 + pow(s, 8.0) * 0.08);
+    #endif
 
     #ifdef USE_HDRI
       // environment bake: the photographed sky above the horizon, our cloud deck below —
@@ -158,9 +134,6 @@ export function createSky(hdri = null) {
       uHdri: { value: hdri?.texture ?? null },
       uHdriRot: { value: hdri?.rotation ?? 0 },
       uHdriGain: { value: hdri?.gain ?? 1 },
-      uRayleigh: { value: 0.6 },    // thin air at 60,000 ft: fewer molecules, deeper blue
-      uTurbidity: { value: 1.6 },
-      uSkyGain: { value: 0.55 },
     },
     side: THREE.BackSide,
     depthWrite: false,

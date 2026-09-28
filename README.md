@@ -53,10 +53,11 @@ The aircraft is lit and shaded like a product render, in real time:
 - **Materials.** Clearcoat topcoat over a satin base, with roughness and bump maps painted to match the
   livery: glossy cockpit glass, a glossier dark band, panel seams, doors and control-surface lines.
   Bare-metal ducts and exhaust spikes.
-- **Atmosphere.** A Preetham daylight model above the horizon, and a ray-traced spherical cloud deck
-  lit from its own relief below, fading into the horizon colour of each azimuth.
-- **Tone mapping.** Khronos PBR Neutral, so the whites stay true. Bloom only picks up
-  genuinely bright sources (the sun, glints, emissives).
+- **Sky.** A deep altitude blue fading to a pale limb, over a ray-traced spherical cloud deck.
+  Graded with ACES Filmic. Bloom only picks up genuinely bright sources (the sun, glints, emissives).
+- **Shape and livery.** Matched against Boom's orbit film and stills: a gull wing with a long ogee strake,
+  engines spread along the span, mid-set tailplanes, a horseshoe cockpit visor, the phoenix on the fin,
+  the N2808M registration and Boom mark by the door, and the OVERTURE wordmark across the band.
 
 ## Run it
 

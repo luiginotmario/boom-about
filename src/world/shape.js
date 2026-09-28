@@ -49,12 +49,13 @@ export const WINDOW = { x0: -11.6, pitch: 0.8, count: 27, y: 0.2, hw: 0.16, hh: 
 export const HERO_WINDOW_INDEX = 12; // the one the camera flies through
 export const HERO_WINDOW_X = WINDOW.x0 + WINDOW.pitch * HERO_WINDOW_INDEX; // −2.0
 
-// Cranked-arrow wing: ogival leading edge, notched trailing edge, tips furthest aft.
+// Gull wing (after Boom's orbit film): a long curved strake that starts just behind the
+// cockpit, blending into a straight, sharply swept outer panel with cropped tips.
 export const WING = {
   root: 0.9,
   tip: 16.2,
-  le: [[0.9, -11.5], [2.2, -4.0], [3.6, 1.0], [5.6, 5.4], [8.2, 9.2], [11.2, 12.8], [14.2, 16.6], [16.2, 19.4]],
-  te: [[0.9, 24.0], [3.0, 22.2], [6.4, 20.4], [16.2, 21.4]],
+  le: [[0.9, -13.5], [1.6, -10.0], [2.6, -6.2], [4.0, -2.4], [5.8, 1.6], [7.8, 5.2], [16.2, 19.6]],
+  te: [[0.9, 23.6], [3.2, 22.0], [5.4, 21.3], [16.2, 21.7]],
   t0: 0.66,   // root thickness
   t1: 0.05,   // tip thickness
 };
@@ -87,9 +88,11 @@ export function wingLowerY(x, z) {
   return wingYAt(z) - wingHalfThickness(z, u);
 }
 
-// Four Symphony engines, paired close under the inboard wing, nozzles past the trailing edge.
-export const NACELLE = { x0: 14.6, length: 8.6, radius: 0.72 };
-export const ENGINES = [3.35, 5.5].map((z) => ({
+// Four Symphony engines spread along the span — inboard at about a third of the semispan,
+// outboard just past half — hung on short pylons under the wing, ahead of the trailing edge.
+export const NACELLE = { length: 6.4, radius: 0.68 };
+export const ENGINES = [[5.0, 14.8], [8.6, 15.2]].map(([z, x0]) => ({
   z,
-  y: wingLowerY(NACELLE.x0 + 4.5, z) - NACELLE.radius - 0.12,
+  x0,
+  y: wingLowerY(x0 + 3.2, z) - NACELLE.radius - 0.14,
 }));

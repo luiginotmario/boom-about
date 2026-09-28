@@ -3,7 +3,7 @@ import {
   NOSE, TAIL, LENGTH, SY, radiusAt, centerYAt, WINDOW, HERO_WINDOW_X,
   ENGINES, NACELLE, WING, piecewise, wingYAt,
 } from './shape.js';
-import { fuselageLivery, tailLivery, wingBump } from './livery.js';
+import { fuselageLivery, tailLivery, wingBump, FIN_UV } from './livery.js';
 
 // ── geometry builders ───────────────────────────────────────────────────
 
@@ -16,7 +16,8 @@ export function bodyGeometry(x0, x1, segments, radial, radiusFn = radiusAt, cent
     const x = x0 + (x1 - x0) * (x0 === NOSE ? 1 - Math.pow(1 - s, 1.6) : s);
     const r = radiusFn(x), yc = centerFn(x);
     for (let j = 0; j <= radial; j++) {
-      const th = (j / radial) * Math.PI * 2;
+      // start at the belly so the texture seam sits under the aircraft, not across the livery
+      const th = (j / radial) * Math.PI * 2 - Math.PI / 2;
       pos.push(x, yc + r * SY * Math.sin(th), r * Math.cos(th));
       uv.push((x - NOSE) / LENGTH, j / radial);
     }
@@ -79,17 +80,20 @@ function lathe(points, segments = 96) {
 }
 function nacelleGeometries() {
   const L = NACELLE.length, R = NACELLE.radius;
+  const f = (t) => t * L; // profile stations as fractions of the nacelle length
   const cowl = lathe([
-    [R * 0.84, 0], [R * 0.9, 0.06], [R * 0.96, 0.3], [R, 0.9], [R, 4.8], [R * 0.97, 6.4],
-    [R * 0.9, 7.6], [R * 0.82, L],
+    [R * 0.84, 0], [R * 0.9, f(0.008)], [R * 0.96, f(0.04)], [R, f(0.12)], [R, f(0.58)], [R * 0.97, f(0.75)],
+    [R * 0.9, f(0.88)], [R * 0.8, L],
   ]);
   const duct = lathe([
-    [R * 0.84, 0], [R * 0.8, 0.25], [R * 0.79, 1.2], [R * 0.78, 6.0], [R * 0.74, 7.8], [R * 0.8, L],
+    [R * 0.84, 0], [R * 0.8, f(0.03)], [R * 0.79, f(0.14)], [R * 0.78, f(0.7)], [R * 0.73, f(0.9)], [R * 0.78, L],
   ]);
-  // the exhaust spike that pokes out of each nozzle
-  const spike = new THREE.ConeGeometry(R * 0.44, 1.7, 64).rotateZ(-Math.PI / 2).translate(L + 0.35, 0, 0);
-  const plugBase = new THREE.CylinderGeometry(R * 0.44, R * 0.44, 0.9, 64).rotateZ(-Math.PI / 2).translate(L - 0.95, 0, 0);
-  return { cowl, duct, spike, plugBase };
+  // exhaust plug: sits in the nozzle and pokes just past the lip
+  const spike = new THREE.ConeGeometry(R * 0.42, 1.5, 64).rotateZ(-Math.PI / 2).translate(L + 0.2, 0, 0);
+  const plugBase = new THREE.CylinderGeometry(R * 0.42, R * 0.42, 0.8, 64).rotateZ(-Math.PI / 2).translate(L - 0.95, 0, 0);
+  // fan spinner, visible down the intake
+  const spinner = new THREE.ConeGeometry(R * 0.3, 0.7, 48).rotateZ(Math.PI / 2).translate(0.85, 0, 0);
+  return { cowl, duct, spike, plugBase, spinner };
 }
 
 // Blueprint structure lines: frames and stringers inside a fuselage section.
@@ -271,11 +275,11 @@ export function createOverture(renderer) {
   // Horizontal stabilisers.
   for (const side of [1, -1]) {
     const g = part(side > 0 ? 'left-stabilizer' : 'right-stabilizer', [9, 0.3, 3.5 * side]);
-    // low-set, swept, with a hint of anhedral — as on Boom's renderings
-    const y = centerYAt(26) - radiusAt(26) * SY * 0.45;
+    // mid-set on the tail cone, swept, with a little dihedral
+    const y = centerYAt(26) - 0.05;
     const stab = liftingSurface({
-      z0: 0.2, z1: 6.0, le: [[0.2, 22.8], [6.0, 27.9]], te: [[0.2, 29.4], [6.0, 29.7]],
-      t0: 0.26, t1: 0.03, yAt: (z) => y - 0.045 * z, side, nu: 32, nw: 32,
+      z0: 0.2, z1: 5.6, le: [[0.2, 24.6], [5.6, 28.6]], te: [[0.2, 29.4], [5.6, 30.0]],
+      t0: 0.26, t1: 0.03, yAt: (z) => y + 0.06 * z, side, nu: 32, nw: 32,
     });
     g.add(new THREE.Mesh(stab, white));
   }
@@ -288,20 +292,23 @@ export function createOverture(renderer) {
       t0: 0.5, t1: 0.05, yAt: () => 0, nu: 40, nw: 40,
     });
     finGeo.rotateX(-Math.PI / 2);
+    // Isotropic UVs in metres (u aft, v up) so the livery mark isn't stretched by the taper.
+    const fp = finGeo.attributes.position, fuv = finGeo.attributes.uv;
+    for (let i = 0; i < fp.count; i++) fuv.setXY(i, (fp.getX(i) - FIN_UV.x0) / FIN_UV.size, (fp.getY(i) - FIN_UV.y0) / FIN_UV.size);
     g.add(new THREE.Mesh(finGeo, fin));
   }
 
   // Four Symphony nacelles, hung under the gull wing.
   const nac = nacelleGeometries();
   const intakeGeo = new THREE.CircleGeometry(NACELLE.radius * 0.8, 64).rotateY(-Math.PI / 2);
-  const pylonGeo = new THREE.BoxGeometry(4.6, 0.36, 0.16);
+  const pylonGeo = new THREE.BoxGeometry(NACELLE.length * 0.62, 0.4, 0.16);
   let heroEngine = null;
   wingGroups.forEach((wingGroup, wi) => {
     const side = wi === 0 ? 1 : -1;
     for (const [ei, e] of ENGINES.entries()) {
       const holder = new THREE.Group();
       holder.name = `symphony-${side > 0 ? 'L' : 'R'}${ei + 1}`;
-      holder.position.set(NACELLE.x0, e.y, e.z * side);
+      holder.position.set(e.x0, e.y, e.z * side);
       const isHero = side > 0 && ei === 1; // outboard: nothing between it and the camera
       const shell = new THREE.Mesh(nac.cowl, isHero ? heroNacelle : cowlMat);
       const duct = new THREE.Mesh(nac.duct, isHero ? heroDuct : metal);
@@ -309,16 +316,31 @@ export function createOverture(renderer) {
       const plug = new THREE.Mesh(nac.plugBase, metal);
       const intake = new THREE.Mesh(intakeGeo, dark);
       intake.position.x = 1.0;
+      const spinner = new THREE.Mesh(nac.spinner, metal);
       const pylon = new THREE.Mesh(pylonGeo, cowlMat);
-      pylon.position.set(4.4, NACELLE.radius + 0.14, 0);
-      holder.add(shell, duct, spike, plug, pylon);
+      pylon.position.set(NACELLE.length * 0.55, NACELLE.radius + 0.16, 0);
+      holder.add(shell, duct, spike, plug, pylon, spinner);
       if (!isHero) holder.add(intake);
-      else heroEngine = { holder, intake, clipPlanes: null };
+      else heroEngine = { holder, intake, spinner, clipPlanes: null };
       wingGroup.add(holder);
       // engines drop further out of the wing when exploded
       parts.push({ obj: holder, explode: new THREE.Vector3(1.0, -2.2, 0.9 * side * (ei + 1)), base: holder.position.clone() });
     }
   });
+
+  // Blade antennas on the crown and belly — small, but they sell the scale.
+  const bladeGeo = new THREE.BoxGeometry(0.34, 0.2, 0.025).translate(0, 0.1, 0);
+  bladeGeo.attributes.position.array.forEach((v, i, arr) => {
+    if (i % 3 === 0 && arr[i + 1] > 0.1) arr[i] = v + 0.12; // sweep the top edge back
+  });
+  for (const [x, up] of [[-17.5, 1], [-6, 1], [3.5, 1], [-9, -1]]) {
+    const blade = new THREE.Mesh(bladeGeo, metal);
+    const r = radiusAt(x) * SY;
+    blade.position.set(x, centerYAt(x) + up * (r - 0.01), 0);
+    if (up < 0) blade.rotation.z = Math.PI;
+    const section = x < -13 ? 'nose' : x < -1 ? 'forward-fuselage' : 'aft-fuselage';
+    sectionGroups[section].add(blade);
+  }
 
   root.traverse((o) => {
     if (!o.isMesh) return;
@@ -354,7 +376,7 @@ export function createOverture(renderer) {
     // Nacelle cutaway: a plane sweeps in from the camera side to the engine axis.
     heroEngine.holder.getWorldPosition(tmp);
     clipPlane.constant = tmp.z + (1 - s.cutaway) * 1.2 + 0.001;
-    heroEngine.intake.visible = s.cutaway < 0.02;
+    heroEngine.intake.visible = heroEngine.spinner.visible = s.cutaway < 0.02;
   }
 
   return { root, update, sectionGroups, heroEngine, heroGlass: glass };
