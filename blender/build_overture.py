@@ -49,6 +49,15 @@ def halfHeightAt(x):
         return (tailTop(s) - tailBottom(s)) / 2
     return radiusAt(x) * SY
 
+# Tail-cone chine: aft of the cabin the section sharpens from an ellipse into a lens with a crisp
+# horizontal edge on each side (Boom's "beaver tail"), which the stabilisers sit on.
+def chineAt(x):
+    return 1.0 + 1.1 * smooth(14.0, 27.0, x)
+
+def section_y(x, th):
+    s = math.sin(th)
+    return centerYAt(x) + halfHeightAt(x) * math.copysign(abs(s) ** chineAt(x), s)
+
 def centerYAt(x):
     if x < CABIN_START:
         s = (x - NOSE) / (CABIN_START - NOSE)
@@ -160,7 +169,7 @@ def fuselage_section(name, x0, x1, seg):
             tip = mb.v((x, yc, 0.0))
             rows.append([tip] * (RADIAL + 1))
         else:
-            ring = [mb.v((x, yc + hh * math.sin(th), r * math.cos(th)))
+            ring = [mb.v((x, section_y(x, th), r * math.cos(th)))
                     for th in (j / RADIAL * 2 * math.pi - math.pi / 2 for j in range(RADIAL))]
             rows.append(ring + [ring[0]])             # welded ring, UV seam at the belly
         uvrows.append([(u, j / RADIAL) for j in range(RADIAL + 1)])
@@ -305,8 +314,8 @@ def build_fin():
 # ── wing-to-body fairing ────────────────────────────────────────────────
 def fuselage_half_width(x, y):
     r, hh, yc = radiusAt(x), halfHeightAt(x), centerYAt(x)
-    q = (y - yc) / hh
-    return r * math.sqrt(max(0.0, 1 - q * q))
+    q = min(1.0, abs(y - yc) / hh)
+    return r * math.sqrt(max(0.0, 1 - q ** (2 / chineAt(x))))
 
 def build_fairing():
     """
@@ -339,7 +348,7 @@ def build_fairing():
             zW = zi + d
         else:
             th = math.radians(-68)
-            F = (r * math.cos(th), yc + hh * math.sin(th))
+            F = (r * math.cos(th), section_y(x, th))
             zW = max(WING_ROOT, F[0]) + d
             C = (F[0], wingUpperY(x, zW))
         W = (zW, wingUpperY(x, zW))

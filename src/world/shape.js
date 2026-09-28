@@ -60,9 +60,10 @@ export function centerYAt(x) {
 }
 
 // Cabin windows: small, closely spaced, one row per side.
-export const WINDOW = { x0: -11.6, pitch: 0.8, count: 27, y: 0.2, hw: 0.16, hh: 0.23 };
-export const HERO_WINDOW_INDEX = 12; // the one the camera flies through
-export const HERO_WINDOW_X = WINDOW.x0 + WINDOW.pitch * HERO_WINDOW_INDEX; // −2.0
+// Dense row, as on Boom's renders: 38 windows at 0.55 m between the two doors.
+export const WINDOW = { x0: -11.9, pitch: 0.55, count: 38, y: 0.2, hw: 0.16, hh: 0.23 };
+export const HERO_WINDOW_INDEX = 18; // the one the camera flies through
+export const HERO_WINDOW_X = WINDOW.x0 + WINDOW.pitch * HERO_WINDOW_INDEX; // −2.0 (camera path depends on it)
 
 // Gull wing (after Boom's orbit film): a long curved strake that starts just behind the
 // cockpit, blending into a straight, sharply swept outer panel with cropped tips.
