@@ -98,16 +98,16 @@ function seatParts() {
     box(0.95, 0.62, 0.07, 0.02, 0.31, -0.37, 0.03),   // aisle-side wing
     box(0.95, 0.56, 0.26, 0.05, 0.28, 0.43, 0.04),    // console base
     box(0.3, 0.46, 0.2, 0.42, 0.95, 0.5, 0.05),       // shell wing by the window
-    box(0.2, 0.025, 0.16, 0.2, 0.86, 0.52, 0.01),     // lit nook shelf
+    box(0.13, 0.02, 0.2, 0.645, 0.82, 0.5, 0.008),    // bottle shelf beside the screen
     box(0.34, 0.34, 0.44, -0.52, 0.17, 0.06, 0.06),   // ottoman
-    box(0.44, 0.012, 0.5, -0.78, 0.735, 0.02, 0.005), // tablecloth
+    box(0.44, 0.012, 0.5, -0.78, 0.642, 0.02, 0.005), // tablecloth
   ]);
   const leather = mergeGeometries([
     box(0.62, 0.14, 0.56, 0.05, 0.45, 0.04, 0.06),    // cushion
     box(0.14, 0.72, 0.54, 0.34, 0.86, 0.04, 0.06, -0.18), // backrest, reclined
     box(0.55, 0.06, 0.1, 0.1, 0.67, -0.3, 0.025),     // aisle armrest
-    box(0.02, 0.44, 0.7, 0.585, 0.87, 0.04, 0.012),   // screen bezel
-    box(0.02, 0.2, 0.7, 0.585, 0.56, 0.04, 0.01),     // dark panel under the screen (the table stows here)
+    box(0.02, 0.44, 0.7, 0.585, 0.95, 0.04, 0.012),   // screen bezel
+    box(0.02, 0.26, 0.7, 0.585, 0.6, 0.04, 0.01),     // dark panel under the screen, visible above the table
     box(0.38, 0.05, 0.22, 0.3, 0.6, 0.43, 0.02),      // leather armrest on the console
   ]);
   const head = mergeGeometries([
@@ -116,10 +116,21 @@ function seatParts() {
   ]);
   const walnut = mergeGeometries([
     box(0.62, 0.035, 0.28, -0.16, 0.575, 0.43, 0.012), // console top, forward of the armrest
-    box(0.5, 0.03, 0.6, -0.78, 0.715, 0.02, 0.01),     // tray table (deployed from the seat ahead)
+    box(0.5, 0.03, 0.6, -0.78, 0.62, 0.02, 0.01),      // tray table, deployed low from the seat ahead
   ]);
-  const screen = new THREE.PlaneGeometry(0.64, 0.4).rotateY(Math.PI / 2).translate(0.597, 0.87, 0.04);
-  return { shell, leather, head, walnut, screen };
+  const screen = new THREE.PlaneGeometry(0.64, 0.4).rotateY(Math.PI / 2).translate(0.597, 0.95, 0.04);
+
+  // two glass water bottles on the shelf, under a small reading lamp
+  const bottleProfile = [[0, 0], [0.032, 0], [0.034, 0.01], [0.034, 0.15], [0.03, 0.18], [0.014, 0.205], [0.013, 0.228], [0, 0.228]]
+    .map(([r, y]) => new THREE.Vector2(r, y));
+  const bottle = (z) => new THREE.LatheGeometry(bottleProfile, 24).translate(0.648, 0.83, z);
+  const cap = (z) => new THREE.CylinderGeometry(0.015, 0.015, 0.026, 16).translate(0.648, 0.83 + 0.24, z);
+  const bottles = mergeGeometries([bottle(0.455), bottle(0.545)]);
+  const caps = mergeGeometries([cap(0.455), cap(0.545)]);
+  const lamp = new THREE.BoxGeometry(0.07, 0.012, 0.09).translate(0.605, 1.14, 0.5);
+  // the soft pool the lamp throws on the shell behind the bottles
+  const pool = new THREE.PlaneGeometry(0.3, 0.44).rotateY(Math.PI / 2).translate(0.578, 0.96, 0.5);
+  return { shell, leather, head, walnut, screen, bottles, caps, lamp, pool };
 }
 
 function mirrorZ(geometry) {
@@ -132,6 +143,22 @@ function mirrorZ(geometry) {
   }
   g.computeVertexNormals();
   return g;
+}
+
+// Warm falloff for the reading lamp's pool of light: brightest just under the lamp.
+function lampPoolTexture() {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 192;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(64, 18, 4, 64, 60, 120);
+  g.addColorStop(0, 'rgba(255,214,160,0.55)');
+  g.addColorStop(0.45, 'rgba(255,200,140,0.18)');
+  g.addColorStop(1, 'rgba(255,190,130,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 192);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
 function emblemTexture(renderer) {
@@ -222,6 +249,14 @@ export function createCabin(renderer) {
     head: new THREE.MeshStandardMaterial({ color: 0x2c2d31, roughness: 0.8 }),
     walnut: new THREE.MeshStandardMaterial({ color: 0x7a5234, roughness: 0.42 }),
     screen: new THREE.MeshBasicMaterial({ map: screenTexture(renderer), color: new THREE.Color(1.25, 1.25, 1.25) }),
+    bottles: new THREE.MeshPhysicalMaterial({
+      color: 0xe4eef0, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.45, depthWrite: false, envMapIntensity: 1.6,
+    }),
+    caps: new THREE.MeshStandardMaterial({ color: 0xc9ccd0, metalness: 1, roughness: 0.3 }),
+    lamp: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.86, 0.66).multiplyScalar(3) }),
+    pool: new THREE.MeshBasicMaterial({
+      map: lampPoolTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    }),
   };
   const m4 = new THREE.Matrix4();
   for (const side of [1, -1]) {
@@ -254,7 +289,7 @@ export function createCabin(renderer) {
   const hotspots = {
     // framed from a right-hand window seat, like Boom's cabin rendering
     window: new THREE.Vector3(WINDOW.x0 + Math.round((-4.3 - WINDOW.x0) / WINDOW.pitch) * WINDOW.pitch, WINDOW.y + 0.12, -(wallZ(WINDOW.y, R_CABIN) - 0.05)),
-    screen: new THREE.Vector3(seatX(4) + 0.6, FLOOR_Y + 0.98, -(SEAT_Z + 0.04)),
+    screen: new THREE.Vector3(seatX(4) + 0.6, FLOOR_Y + 1.06, -(SEAT_Z + 0.04)),
     seat: new THREE.Vector3(seatX(5) - 0.25, FLOOR_Y + 0.6, -(SEAT_Z + 0.43)),
   };
 
