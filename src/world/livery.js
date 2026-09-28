@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { NOSE, LENGTH, SY, radiusAt, centerYAt } from './shape.js';
+import { NOSE, LENGTH, halfHeightAt, centerYAt } from './shape.js';
 
 // Livery painted at runtime on canvases, traced from Boom's Overture renderings.
 // The fuselage is unwrapped as u = along the body (nose → tail) and v = angle around it,
@@ -15,7 +15,7 @@ const SLATE = [52, 60, 76];       // the band lightens toward its forward tip
 const GLASS = [10, 13, 19];
 
 // Fin texture space: metres, isotropic, so the mark keeps its proportions on the tapered fin.
-export const FIN_UV = { x0: 18.5, y0: 0.8, size: 12 };
+export const FIN_UV = { x0: 16.4, y0: 0.2, size: 12.5 };
 
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = (a, b, v) => {
@@ -104,7 +104,7 @@ export function fuselageLivery(renderer) {
 
   // Paint in metres: x along the body, y up the side.
   const px = (x) => ((x - NOSE) / LENGTH) * W;
-  const thetaFor = (x, y) => Math.asin(Math.max(-1, Math.min(1, (y - centerYAt(x)) / (radiusAt(x) * SY))));
+  const thetaFor = (x, y) => Math.asin(Math.max(-1, Math.min(1, (y - centerYAt(x)) / halfHeightAt(x))));
   const TAU = Math.PI * 2;
   const py = (th) => ((((th + Math.PI / 2) % TAU) + TAU) % TAU) / TAU * H;
   const bothSides = (th) => [py(th), py(Math.PI - th)];
@@ -139,7 +139,7 @@ export function fuselageLivery(renderer) {
     const th = thetaFor(x, y);
     col.save();
     col.translate(px(x), py(side > 0 ? th : Math.PI - th));
-    const sx = W / LENGTH / 100, sy = H / (Math.PI * 2 * radiusAt(x) * SY) / 100;
+    const sx = W / LENGTH / 100, sy = H / (Math.PI * 2 * halfHeightAt(x)) / 100;
     col.scale(side > 0 ? sx : -sx, side > 0 ? -sy : sy);
     draw();
     col.restore();
@@ -240,9 +240,9 @@ export function tailLivery(renderer) {
   const pv = (y) => ((y - FIN_UV.y0) / FIN_UV.size) * S;
   ctx.save();
   // large, and clipped by the fin's edges — as painted on the aircraft
-  ctx.translate(px(27.1), pv(4.3));
+  ctx.translate(px(26.1), pv(3.0));
   ctx.scale(1, -1); // canvas y (= v) runs upward on the fin; drawPhoenix draws y-up itself
-  drawPhoenix(ctx, 0, 0, 4.2 / FIN_UV.size * S, 'rgb(236,238,241)', `rgb(${INK.join(',')})`);
+  drawPhoenix(ctx, 0, 0, 2.6 / FIN_UV.size * S, 'rgb(236,238,241)', `rgb(${INK.join(',')})`);
   ctx.restore();
   return canvasTexture(c, renderer);
 }

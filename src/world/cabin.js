@@ -146,7 +146,7 @@ export function createCabin(renderer) {
   const wallMat = withWindowCutouts(new THREE.MeshStandardMaterial({
     color: 0xebe8e3, roughness: 0.62, side: THREE.BackSide,
   }));
-  const wall = new THREE.Mesh(bodyGeometry(CABIN_X0, CABIN_X1, 80, 128, () => R_CABIN, () => 0), wallMat);
+  const wall = new THREE.Mesh(bodyGeometry(CABIN_X0, CABIN_X1, 80, 128, () => R_CABIN, () => 0, () => R_CABIN * SY), wallMat);
   root.add(wall);
 
   // Window wells and trim.

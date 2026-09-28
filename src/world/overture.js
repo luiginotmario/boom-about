@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {
-  NOSE, TAIL, LENGTH, SY, radiusAt, centerYAt, WINDOW, HERO_WINDOW_X,
+  NOSE, TAIL, LENGTH, SY, radiusAt, halfHeightAt, centerYAt, WINDOW, HERO_WINDOW_X,
   ENGINES, NACELLE, WING, piecewise, wingYAt,
 } from './shape.js';
 import { fuselageLivery, tailLivery, wingBump, FIN_UV } from './livery.js';
@@ -8,17 +8,17 @@ import { fuselageLivery, tailLivery, wingBump, FIN_UV } from './livery.js';
 // ── geometry builders ───────────────────────────────────────────────────
 
 // Fuselage skin between x0 and x1. u runs along the body, v around it.
-export function bodyGeometry(x0, x1, segments, radial, radiusFn = radiusAt, centerFn = centerYAt) {
+export function bodyGeometry(x0, x1, segments, radial, radiusFn = radiusAt, centerFn = centerYAt, heightFn = halfHeightAt) {
   const pos = [], uv = [], idx = [];
   for (let i = 0; i <= segments; i++) {
     // bunch samples toward the nose tip where curvature is highest
     const s = i / segments;
     const x = x0 + (x1 - x0) * (x0 === NOSE ? 1 - Math.pow(1 - s, 1.6) : s);
-    const r = radiusFn(x), yc = centerFn(x);
+    const r = radiusFn(x), hh = heightFn(x), yc = centerFn(x);
     for (let j = 0; j <= radial; j++) {
       // start at the belly so the texture seam sits under the aircraft, not across the livery
       const th = (j / radial) * Math.PI * 2 - Math.PI / 2;
-      pos.push(x, yc + r * SY * Math.sin(th), r * Math.cos(th));
+      pos.push(x, yc + hh * Math.sin(th), r * Math.cos(th));
       uv.push((x - NOSE) / LENGTH, j / radial);
     }
   }
@@ -102,10 +102,10 @@ function structureLines(x0, x1) {
   const pts = [];
   const radial = 64;
   for (let x = Math.ceil(x0 / 0.9) * 0.9; x < x1; x += 0.9) {
-    const r = radiusAt(x) * 0.985, yc = centerYAt(x);
+    const r = radiusAt(x) * 0.985, hh = halfHeightAt(x) * 0.985, yc = centerYAt(x);
     for (let j = 0; j < radial; j++) {
       const a = (j / radial) * Math.PI * 2, b = ((j + 1) / radial) * Math.PI * 2;
-      pts.push(x, yc + r * SY * Math.sin(a), r * Math.cos(a), x, yc + r * SY * Math.sin(b), r * Math.cos(b));
+      pts.push(x, yc + hh * Math.sin(a), r * Math.cos(a), x, yc + hh * Math.sin(b), r * Math.cos(b));
     }
   }
   const strings = 18, steps = 40;
@@ -114,8 +114,9 @@ function structureLines(x0, x1) {
     for (let i = 0; i < steps; i++) {
       const xa = x0 + ((x1 - x0) * i) / steps, xb = x0 + ((x1 - x0) * (i + 1)) / steps;
       const ra = radiusAt(xa) * 0.985, rb = radiusAt(xb) * 0.985;
-      pts.push(xa, centerYAt(xa) + ra * SY * Math.sin(th), ra * Math.cos(th),
-               xb, centerYAt(xb) + rb * SY * Math.sin(th), rb * Math.cos(th));
+      const ha = halfHeightAt(xa) * 0.985, hb = halfHeightAt(xb) * 0.985;
+      pts.push(xa, centerYAt(xa) + ha * Math.sin(th), ra * Math.cos(th),
+               xb, centerYAt(xb) + hb * Math.sin(th), rb * Math.cos(th));
     }
   }
   const g = new THREE.BufferGeometry();
@@ -276,10 +277,10 @@ export function createOverture(renderer) {
   // Horizontal stabilisers.
   for (const side of [1, -1]) {
     const g = part(side > 0 ? 'left-stabilizer' : 'right-stabilizer', [9, 0.3, 3.5 * side]);
-    // mid-set on the tail cone, swept, with a little dihedral
-    const y = centerYAt(26) - 0.05;
+    // mid-set on the tail cone, swept, running aft to the tail tip, with a little dihedral
+    const y = centerYAt(27.5);
     const stab = liftingSurface({
-      z0: 0.2, z1: 5.6, le: [[0.2, 24.6], [5.6, 28.6]], te: [[0.2, 29.4], [5.6, 30.0]],
+      z0: 0.2, z1: 5.6, le: [[0.2, 23.8], [5.6, 28.4]], te: [[0.2, 30.3], [5.6, 30.4]],
       t0: 0.26, t1: 0.03, yAt: (z) => y + 0.06 * z, side, nu: 32, nw: 32,
     });
     g.add(new THREE.Mesh(stab, white));
@@ -288,9 +289,13 @@ export function createOverture(renderer) {
   // Vertical fin (built flat, then stood up: span Z → Y).
   {
     const g = part('fin', [10, 5.5, 0]);
+    // shark-fin profile: a long shallow dorsal fillet that steepens (concave leading edge),
+    // a short flat tip, and a near-vertical trailing edge ending ahead of the tail blade
     const finGeo = liftingSurface({
-      z0: 1.1, z1: 8.4, le: [[1.1, 19.2], [8.4, 27.8]], te: [[1.1, 30.3], [8.4, 29.7]],
-      t0: 0.5, t1: 0.05, yAt: () => 0, nu: 40, nw: 40,
+      z0: 0.3, z1: 5.3,
+      le: [[0.3, 16.8], [1.2, 20.6], [2.2, 23.2], [3.3, 24.9], [4.3, 25.9], [5.3, 26.4]],
+      te: [[0.3, 28.3], [5.3, 27.9]],
+      t0: 0.5, t1: 0.06, yAt: () => 0, nu: 40, nw: 48,
     });
     finGeo.rotateX(-Math.PI / 2);
     // Isotropic UVs in metres (u aft, v up) so the livery mark isn't stretched by the taper.
@@ -336,8 +341,7 @@ export function createOverture(renderer) {
   });
   for (const [x, up] of [[-17.5, 1], [-6, 1], [3.5, 1], [-9, -1]]) {
     const blade = new THREE.Mesh(bladeGeo, metal);
-    const r = radiusAt(x) * SY;
-    blade.position.set(x, centerYAt(x) + up * (r - 0.01), 0);
+    blade.position.set(x, centerYAt(x) + up * (halfHeightAt(x) - 0.01), 0);
     if (up < 0) blade.rotation.z = Math.PI;
     const section = x < -13 ? 'nose' : x < -1 ? 'forward-fuselage' : 'aft-fuselage';
     sectionGroups[section].add(blade);

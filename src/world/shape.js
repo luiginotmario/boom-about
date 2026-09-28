@@ -17,19 +17,34 @@ const smooth = (a, b, v) => {
   return t * t * (3 - 2 * t);
 };
 
+// Tail cone (after Boom's side-profile renders): the crown descends and the belly rises
+// until they meet a little above the centreline, while the width tapers more slowly,
+// so the fuselage finishes as a flat, wide blade behind the fin.
+const TAIL_TOP = 0.5;       // crown height at the tip
+const TAIL_BOTTOM = 0.4;    // belly height at the tip
+const tailS = (x) => (x - CABIN_END) / (TAIL - CABIN_END);
+const tailTop = (s) => R * SY - (R * SY - TAIL_TOP) * Math.pow(s, 1.4);
+const tailBottom = (s) => -R * SY + (R * SY + TAIL_BOTTOM) * Math.pow(s, 1.25);
+
+// Half-width of the fuselage (z).
 export function radiusAt(x) {
   if (x < CABIN_START) {
     // long needle nose
     const s = (x - NOSE) / (CABIN_START - NOSE);
     return R * Math.pow(Math.sin(s * Math.PI / 2), 1.45);
   }
-  if (x > CABIN_END) {
-    // tail cone tapers to a blade where the fin trailing edge ends
-    const s = (x - CABIN_END) / (TAIL - CABIN_END);
-    return R * (1 - 0.93 * Math.pow(s, 1.45));
-  }
+  if (x > CABIN_END) return R * (1 - 0.8 * Math.pow(tailS(x), 1.5));
   // area-ruled waist where the wing is thickest
-  return R * (1 - 0.035 * smooth(-2, 6, x) * (1 - smooth(8, 14, x)));
+  return R * (1 - 0.035 * smooth(-2, 6, x) * (1 - smooth(6, 10, x)));
+}
+
+// Half-height of the fuselage (y). Equal to radius × SY except on the flattened tail cone.
+export function halfHeightAt(x) {
+  if (x > CABIN_END) {
+    const s = tailS(x);
+    return (tailTop(s) - tailBottom(s)) / 2;
+  }
+  return radiusAt(x) * SY;
 }
 
 export function centerYAt(x) {
@@ -38,8 +53,8 @@ export function centerYAt(x) {
     return -0.34 * (1 - s) * (1 - s);           // the nose sits slightly low
   }
   if (x > CABIN_END) {
-    // the crown stays nearly straight while the belly sweeps up to the tail
-    return (R - radiusAt(x)) * SY * 0.78;
+    const s = tailS(x);
+    return (tailTop(s) + tailBottom(s)) / 2;
   }
   return 0;
 }
