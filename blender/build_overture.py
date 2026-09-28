@@ -21,7 +21,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR = os.path.join(ROOT, 'models')
 AO_DIR = os.path.join(OUT_DIR, 'ao')
 os.makedirs(AO_DIR, exist_ok=True)
-FAST = '--fast' in sys.argv          # quick geometry check: skip the bake
+FAST = '--fast' in sys.argv
+# Draco: decoded back to plain floats in the page (positions stay in object space for the window
+# shader). ~0.5 mm position precision over the airframe, fine UVs for the livery.
+COMPRESS = dict(export_draco_mesh_compression_enable=True, export_draco_mesh_compression_level=7,
+                export_draco_position_quantization=16, export_draco_normal_quantization=12,
+                export_draco_texcoord_quantization=14, export_draco_color_quantization=10)          # quick geometry check: skip the bake
 
 # ── shape.js, ported ────────────────────────────────────────────────────
 NOSE, TAIL = -30.5, 30.5
@@ -541,9 +546,8 @@ if not FAST:
         bpy.context.view_layer.objects.active = objs[0]
         print(f'baking {img_name} …', flush=True)
         bpy.ops.object.bake(type='AO', margin=16, use_clear=True)
-        img.filepath_raw = os.path.join(AO_DIR, f'{img_name}.png')
-        img.file_format = 'PNG'
-        img.save()
+        img.file_format = 'JPEG'
+        img.save(filepath=os.path.join(AO_DIR, f'{img_name}.jpg'), quality=86)
 
     for o in occluders: bpy.data.objects.remove(o)
     for o in nacelle_parts + pylons: o.matrix_world = home[o.name]
@@ -558,5 +562,6 @@ bpy.ops.export_scene.gltf(
     filepath=os.path.join(OUT_DIR, 'overture.glb'), export_format='GLB', use_selection=True,
     export_yup=True, export_normals=True, export_texcoords=True, export_materials='NONE',
     export_apply=True,
+    **COMPRESS,
 )
 print('done', flush=True)

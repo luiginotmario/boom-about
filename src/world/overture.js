@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { gltfLoader } from './gltf.js';
 import {
   NOSE, TAIL, LENGTH, SY, radiusAt, halfHeightAt, centerYAt, WINDOW, HERO_WINDOW_X,
   ENGINES, NACELLE, WING, piecewise, wingYAt,
@@ -43,10 +43,10 @@ export function bodyGeometry(x0, x1, segments, radial, radiusFn = radiusAt, cent
 // shape.js, in page coordinates, left-side parts only. UV0 follows the page's conventions
 // (glTF stores V flipped, so it's flipped back here); UV1 carries the baked ambient occlusion.
 const MODEL_URL = new URL('../../models/overture.glb', import.meta.url).href;
-const AO_URL = (name) => new URL(`../../models/ao/${name}.png`, import.meta.url).href;
+const AO_URL = (name) => new URL(`../../models/ao/${name}.jpg`, import.meta.url).href;
 
 async function loadAirframe() {
-  const gltf = await new GLTFLoader().loadAsync(MODEL_URL);
+  const gltf = await gltfLoader.loadAsync(MODEL_URL);
   const geos = {};
   gltf.scene.traverse((o) => {
     if (!o.isMesh) return;

@@ -20,6 +20,11 @@ from common import COLL, MeshBuilder, grid_uv_faces, lathe, join, use_gpu
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'models', 'symphony.glb')
 FAST = '--fast' in sys.argv
+# Draco: decoded back to plain floats in the page (positions stay in object space for the window
+# shader). ~0.5 mm position precision over the airframe, fine UVs for the livery.
+COMPRESS = dict(export_draco_mesh_compression_enable=True, export_draco_mesh_compression_level=7,
+                export_draco_position_quantization=16, export_draco_normal_quantization=12,
+                export_draco_texcoord_quantization=14, export_draco_color_quantization=10)
 
 SX, SR = 11.0 / 8.6, 0.74 / 0.72
 KX = SX / SR           # axial pre-shrink so blades keep their true proportions once scaled
@@ -202,7 +207,7 @@ if not FAST:
 bpy.ops.object.select_all(action='DESELECT')
 for ob in exported: ob.select_set(True)
 kw = dict(filepath=OUT, export_format='GLB', use_selection=True, export_yup=True, export_normals=True,
-          export_texcoords=False, export_materials='NONE', export_apply=True)
+          export_texcoords=False, export_materials='NONE', export_apply=True, **COMPRESS)
 try:
     bpy.ops.export_scene.gltf(**kw, export_vertex_color='ACTIVE')
 except TypeError:

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { gltfLoader } from './gltf.js';
 
 // Symphony: a medium-bypass turbofan, no afterburner, in the nacelle's local frame
 // (intake at x = 0, axis +X). Shown only during the cutaway. The hardware — twisted fan and
@@ -86,7 +86,7 @@ function airflow(count = 2600) {
 }
 
 export async function createSymphony(clipPlanes) {
-  const gltf = await new GLTFLoader().loadAsync(MODEL_URL);
+  const gltf = await gltfLoader.loadAsync(MODEL_URL);
   const part = (name) => gltf.scene.getObjectByName(name);
   const root = new THREE.Group();
   root.name = 'symphony-internals';
