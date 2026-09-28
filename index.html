@@ -1,0 +1,195 @@
+<!doctype html>
+<!--
+  Overture — interactive about page (concept).
+  Serve over HTTP (ES modules + import map):  npx serve .   or   python3 -m http.server 5173
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Overture, Boom Supersonic's airliner — an interactive, real-time 3D walkthrough from 60,000 ft to the silicon.">
+<title>Overture — Supersonic Airliner</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23000'/%3E%3Cg fill='%23fff'%3E%3Cpath d='M16 24 4 14l12 7z'/%3E%3Cpath d='M16 24 9 8l7 12z'/%3E%3Cpath d='M16 24 16 5l1 15z'/%3E%3Cpath d='M16 24 23 8l-5 12z'/%3E%3Cpath d='M16 24 28 14l-11 7z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&display=swap">
+<link rel="modulepreload" href="https://unpkg.com/three@0.170.0/build/three.module.js">
+<link rel="stylesheet" href="styles.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/",
+    "gsap": "https://esm.sh/gsap@3.12.5",
+    "gsap/ScrollTrigger": "https://esm.sh/gsap@3.12.5/ScrollTrigger",
+    "lenis": "https://unpkg.com/lenis@1.1.0/dist/lenis.mjs"
+  }
+}
+</script>
+</head>
+<body>
+
+<div class="loader" aria-hidden="true">
+  <svg class="loader-mark" viewBox="0 0 64 40"><g fill="currentColor"><path d="M32 38 2 24l30 10z"/><path d="M32 38 10 8l22 24z"/><path d="M32 38 22 2l10 30z"/><path d="M32 38 42 2l-8 30z"/><path d="M32 38 54 8 32 32z"/><path d="M32 38 62 24 32 34z"/></g></svg>
+  <span>Climbing to 60,000 ft</span>
+</div>
+
+<canvas id="webgl" aria-hidden="true"></canvas>
+
+<header class="nav">
+  <a class="brand" href="https://boomsupersonic.com" aria-label="Boom Supersonic">
+    <svg viewBox="0 0 64 40" aria-hidden="true"><g fill="currentColor"><path d="M32 38 2 24l30 10z"/><path d="M32 38 10 8l22 24z"/><path d="M32 38 22 2l10 30z"/><path d="M32 38 42 2l-8 30z"/><path d="M32 38 54 8 32 32z"/><path d="M32 38 62 24 32 34z"/></g></svg>
+    <span>BOOM</span>
+  </a>
+  <nav class="nav-links" aria-label="Boom">
+    <a href="https://boomsupersonic.com/overture" aria-current="page">Overture</a>
+    <a href="https://boomsupersonic.com/symphony">Symphony</a>
+    <a href="https://boomsupersonic.com/boomless-cruise">Boomless</a>
+    <a href="https://boomsupersonic.com/xb-1">XB-1</a>
+  </nav>
+  <span class="concept-chip">Concept</span>
+</header>
+
+<aside class="hud" aria-label="Flight data">
+  <div class="hud-row"><span class="hud-k">ALT</span><span class="hud-v"><span data-hud="alt">60,000</span> ft</span></div>
+  <div class="hud-row"><span class="hud-k">MACH</span><span class="hud-v" data-hud="mach">1.70</span></div>
+  <div class="hud-chapter" data-hud="chapter">01 / 11 — Overture</div>
+  <div class="hud-progress" aria-hidden="true"><i></i></div>
+</aside>
+
+<nav class="rail" aria-label="Chapters"></nav>
+
+<div class="scroll-cue" aria-hidden="true"><span>Scroll to board</span><i></i></div>
+
+<!-- Captions. All copy lives in the DOM; the scroll position decides which one is on. -->
+<div class="captions">
+
+  <section class="cap cap--hero" data-chapter="hero">
+    <p class="eyebrow">Supersonic Airliner</p>
+    <h1 class="display">OVERTURE</h1>
+    <p class="lede">Twice the speed of today's airliners, flying high enough to see the curvature of the Earth.</p>
+  </section>
+
+  <section class="cap cap--numbers" data-chapter="numbers">
+    <h2 class="title">By the Numbers</h2>
+    <dl class="stats">
+      <div class="stat"><dt>Cruise speed</dt><dd><span class="unit">Mach</span><span data-odo="1.7"></span></dd></div>
+      <div class="stat"><dt>Cruise altitude</dt><dd><span data-odo="60"></span><span class="unit">kft</span></dd></div>
+      <div class="stat"><dt>SAF compatible</dt><dd><span data-odo="100"></span><span class="unit">%</span></dd></div>
+      <div class="stat"><dt>Range</dt><dd><span data-odo="4,250"></span><span class="unit">nm</span></dd></div>
+      <div class="stat"><dt>Passengers</dt><dd><span data-odo="60–80"></span></dd></div>
+      <div class="stat"><dt>Global routes</dt><dd><span data-odo="600"></span><span class="unit">+</span></dd></div>
+      <div class="stat"><dt>Orders &amp; pre-orders</dt><dd><span data-odo="130"></span></dd></div>
+    </dl>
+  </section>
+
+  <section class="cap cap--left" data-chapter="approach">
+    <p class="eyebrow">Passenger Experience</p>
+    <h2 class="title">Take a window seat.</h2>
+    <p class="body">At 60,000 feet, Overture flies above other commercial aircraft and above most turbulence. That makes supersonic flight smoother than what you're used to.</p>
+  </section>
+
+  <section class="cap cap--left" data-chapter="cabin">
+    <p class="eyebrow">Passenger Experience</p>
+    <h2 class="title">Experience a New Era of Travel</h2>
+    <p class="body">Overture's all-premium cabin delivers ample room to relax or focus with large windows, premium materials, and next-gen in-flight connectivity and interactivity—all with fares similar to today's business class.</p>
+    <p class="hint"><span class="hint-fine">Move to look around · explore the markers</span><span class="hint-touch">Tap the markers to explore</span></p>
+  </section>
+
+  <section class="cap cap--right" data-chapter="airframe">
+    <p class="eyebrow">Engineering</p>
+    <h2 class="title">Everything XB-1 proved, scaled up.</h2>
+    <p class="body">In January 2025, XB-1 became the first independently developed jet to break the sound barrier. Its carbon fiber composites, digitally-optimized aerodynamics and supersonic intakes are the foundation Overture is built on.</p>
+  </section>
+
+  <section class="cap cap--left" data-chapter="carbon">
+    <p class="eyebrow">Materials</p>
+    <h2 class="title">Carbon fiber, ply by ply.</h2>
+    <p class="body">Each layer is laid at its own angle (0°, 45°, 90°) so the airframe carries load along the paths it actually flows, at a fraction of the weight of metal.</p>
+  </section>
+
+  <section class="cap cap--left" data-chapter="silicon">
+    <p class="eyebrow">Down to the Silicon</p>
+    <h2 class="title">Digital to the core.</h2>
+    <p class="body">XB-1 flew with an augmented reality vision system and aerodynamics refined in simulation. Overture carries those learnings forward, with computation at the heart of a supersonic airliner.</p>
+  </section>
+
+  <section class="cap cap--right" data-chapter="symphony">
+    <p class="eyebrow">Propulsion</p>
+    <h2 class="title">Symphony</h2>
+    <p class="body">Designed and built by Boom, for Overture. A medium-bypass turbofan with no afterburner, so takeoff sounds like today's long-haul airliners, not Concorde.</p>
+    <dl class="mini-stats">
+      <div><dt>Thrust</dt><dd>40,000 lb</dd></div>
+      <div><dt>Bypass ratio</dt><dd>Medium</dd></div>
+      <div><dt>SAF compatible</dt><dd>100%</dd></div>
+      <div><dt>Certification</dt><dd>FAA Part 33</dd></div>
+    </dl>
+  </section>
+
+  <section class="cap cap--left" data-chapter="mach">
+    <p class="eyebrow">Supersonic</p>
+    <p class="mach-live"><span class="unit">Mach</span> <span data-live="mach">1.70</span></p>
+    <p class="mach-mu">Shock cone half-angle <span class="mu">μ = asin(1/M) = <b data-live="mu">36.0°</b></span></p>
+    <p class="body">Over water, Overture cruises at Mach 1.7: twice the speed of today's airliners, cutting flight times in half across more than 600 global routes.</p>
+  </section>
+
+  <section class="cap cap--right" data-chapter="boomless">
+    <p class="eyebrow">Boomless Cruise</p>
+    <h2 class="title">The boom that never lands.</h2>
+    <p class="body">Using Mach cutoff physics, the sonic boom refracts upward through the atmosphere, the way light bends in water, and never reaches the ground. Over land, that means flights 40–50% faster. San Francisco to New York in 3 h 25 min.</p>
+  </section>
+
+  <section class="cap cap--final" data-chapter="airlines">
+    <p class="eyebrow">130 Orders &amp; Pre-orders</p>
+    <h2 class="title">Fly the World's Leading Airlines</h2>
+    <p class="body">United Airlines, American Airlines, and Japan Airlines have orders and pre-orders of Overture to fly within their fleets.</p>
+    <ul class="airlines" aria-label="Airline customers">
+      <li>United Airlines</li>
+      <li>American Airlines</li>
+      <li>Japan Airlines</li>
+    </ul>
+    <div class="ctas">
+      <a class="btn btn--primary" href="https://boomsupersonic.com/faq">Frequently asked questions</a>
+      <a class="btn" href="https://boomsupersonic.com/symphony">Explore Symphony</a>
+    </div>
+    <p class="credit">A concept by Luigi Rivolta. Every frame is rendered live in your browser. No video, no pre-rendered sequences.</p>
+  </section>
+</div>
+
+<!-- Labels pinned to points in the 3D scene -->
+<div class="labels">
+  <span class="tag" data-tag="nose"><i></i>Nose</span>
+  <span class="tag" data-tag="fuselage"><i></i>Carbon composite fuselage</span>
+  <span class="tag" data-tag="wing"><i></i>Gull wing · digitally-optimized</span>
+  <span class="tag" data-tag="engines"><i></i>Symphony × 4</span>
+  <span class="tag" data-tag="fin"><i></i>Vertical tail</span>
+
+  <span class="tag" data-tag="fan"><i></i>Fan</span>
+  <span class="tag" data-tag="compressor"><i></i>Compressor</span>
+  <span class="tag" data-tag="combustor"><i></i>Combustor</span>
+  <span class="tag" data-tag="turbine"><i></i>Turbine</span>
+  <span class="tag" data-tag="nozzle"><i></i>Nozzle · no afterburner</span>
+
+  <span class="tag tag--ground" data-tag="ground"><i></i>Ground · no audible boom</span>
+
+  <button class="hotspot" type="button" data-hotspot="window">
+    <span class="hotspot-dot" aria-hidden="true"></span>
+    <span class="hotspot-card"><b>Large windows</b>High enough to see the curvature of the Earth below.</span>
+  </button>
+  <button class="hotspot" type="button" data-hotspot="screen">
+    <span class="hotspot-dot" aria-hidden="true"></span>
+    <span class="hotspot-card"><b>Next-gen connectivity</b>In-flight connectivity and interactivity at every seat.</span>
+  </button>
+  <button class="hotspot" type="button" data-hotspot="seat">
+    <span class="hotspot-dot" aria-hidden="true"></span>
+    <span class="hotspot-card"><b>All-premium cabin</b>Premium materials and ample room to relax or focus.</span>
+  </button>
+</div>
+
+<main id="scroll" aria-hidden="true"></main>
+
+<noscript><p class="noscript">This experience needs JavaScript and WebGL.</p></noscript>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
