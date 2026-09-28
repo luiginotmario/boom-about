@@ -75,7 +75,7 @@ const overture = await createOverture(renderer);
 scene.add(overture.root);
 const cabin = createCabin(renderer);
 scene.add(cabin.root);
-const symphony = createSymphony(overture.heroEngine.clipPlanes);
+const symphony = await createSymphony(overture.heroEngine.clipPlanes);
 overture.heroEngine.holder.add(symphony.root);
 // internals are modelled for an 8.6 m × 0.72 m nacelle: stretch along the axis, keep the section
 symphony.root.scale.set(NACELLE.length / 8.6, NACELLE.radius / 0.72, NACELLE.radius / 0.72);

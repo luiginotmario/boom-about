@@ -1,45 +1,11 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-// Symphony: a medium-bypass turbofan, no afterburner. Built in the nacelle's
-// local frame (intake at x = 0, axis +X). Shown only during the cutaway.
-
-function bladeGeometry(chord, span, hub, twist, thick = 0.018) {
-  const g = new THREE.BoxGeometry(chord, span, thick, 2, 6, 1);
-  const p = g.attributes.position;
-  const v = new THREE.Vector3();
-  for (let i = 0; i < p.count; i++) {
-    v.fromBufferAttribute(p, i);
-    const k = (v.y / span + 0.5);                // 0 at root, 1 at tip
-    const a = 0.55 + twist * k;                  // stagger + twist
-    const x = v.x * Math.cos(a) - v.z * Math.sin(a);
-    const z = v.x * Math.sin(a) + v.z * Math.cos(a);
-    p.setXYZ(i, x, v.y + hub + span / 2, z);
-  }
-  g.computeVertexNormals();
-  return g;
-}
-
-function stage({ x, count, hub, tip, chord, twist, material }) {
-  const geo = bladeGeometry(chord, tip - hub, hub, twist);
-  const mesh = new THREE.InstancedMesh(geo, material, count);
-  const m = new THREE.Matrix4();
-  for (let i = 0; i < count; i++) {
-    m.makeRotationX((i / count) * Math.PI * 2);
-    m.setPosition(x, 0, 0);
-    mesh.setMatrixAt(i, m);
-  }
-  const disc = new THREE.Mesh(
-    new THREE.CylinderGeometry(hub, hub, chord * 0.9, 40).rotateZ(Math.PI / 2).translate(x, 0, 0),
-    material,
-  );
-  const g = new THREE.Group();
-  g.add(mesh, disc);
-  return g;
-}
-
-function along(geo) {
-  return geo.rotateZ(-Math.PI / 2); // cylinder/cone axis Y → X
-}
+// Symphony: a medium-bypass turbofan, no afterburner, in the nacelle's local frame
+// (intake at x = 0, axis +X). Shown only during the cutaway. The hardware — twisted fan and
+// compressor blades, stator rows, flanged core casing, annular combustor — is modelled in
+// Blender (blender/build_symphony.py) with ambient occlusion baked into its vertex colours.
+const MODEL_URL = new URL('../../models/symphony.glb', import.meta.url).href;
 
 const flowVertex = /* glsl */ `
   precision highp float;
@@ -119,50 +85,40 @@ function airflow(count = 2600) {
   return points;
 }
 
-export function createSymphony(clipPlanes) {
+export async function createSymphony(clipPlanes) {
+  const gltf = await new GLTFLoader().loadAsync(MODEL_URL);
+  const part = (name) => gltf.scene.getObjectByName(name);
   const root = new THREE.Group();
   root.name = 'symphony-internals';
 
-  const titanium = new THREE.MeshStandardMaterial({ color: 0xd2d5da, metalness: 0.85, roughness: 0.3 });
-  const steel = new THREE.MeshStandardMaterial({ color: 0xb4b9c2, metalness: 0.9, roughness: 0.34 });
-  const hotMetal = new THREE.MeshStandardMaterial({ color: 0x9a7a5c, metalness: 0.8, roughness: 0.38 });
-  const casing = new THREE.MeshStandardMaterial({
-    color: 0x9aa1ab, metalness: 0.7, roughness: 0.42, side: THREE.DoubleSide, clippingPlanes: clipPlanes,
+  const metal = (color, roughness, extra = {}) => new THREE.MeshStandardMaterial({
+    color, metalness: 0.85, roughness, vertexColors: true, ...extra,
   });
-  const flame = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.45, 0.12).multiplyScalar(3.2) });
+  const titanium = metal(0xd2d5da, 0.28);
+  const steel = metal(0xb4b9c2, 0.34);
+  const hotMetal = metal(0x9a7a5c, 0.4);
+  const casing = metal(0x9aa1ab, 0.42, { metalness: 0.7, side: THREE.DoubleSide, clippingPlanes: clipPlanes, clipShadows: true });
+  const flame = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.45, 0.12).multiplyScalar(3.2), vertexColors: true, side: THREE.DoubleSide });
+  const mesh = (name, material) => {
+    const m = new THREE.Mesh(part(name).geometry, material);
+    m.name = name;
+    return m;
+  };
 
-  // LP spool: fan, booster, low-pressure turbine
+  // LP spool: spinner and fan, booster, low-pressure turbine, shaft
   const lp = new THREE.Group();
-  const spinner = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.55, 40).rotateZ(Math.PI / 2).translate(0.95, 0, 0), titanium);
-  lp.add(
-    spinner,
-    stage({ x: 1.08, count: 20, hub: 0.16, tip: 0.6, chord: 0.2, twist: 0.8, material: titanium }),
-    stage({ x: 1.6, count: 30, hub: 0.2, tip: 0.4, chord: 0.1, twist: 0.4, material: steel }),
-    stage({ x: 1.85, count: 30, hub: 0.2, tip: 0.39, chord: 0.1, twist: 0.4, material: steel }),
-    stage({ x: 4.85, count: 44, hub: 0.2, tip: 0.36, chord: 0.1, twist: -0.3, material: hotMetal }),
-    stage({ x: 5.15, count: 46, hub: 0.2, tip: 0.39, chord: 0.1, twist: -0.3, material: hotMetal }),
-    stage({ x: 5.45, count: 48, hub: 0.2, tip: 0.42, chord: 0.1, twist: -0.3, material: hotMetal }),
-    new THREE.Mesh(along(new THREE.CylinderGeometry(0.05, 0.05, 5.0, 16)).translate(3.4, 0, 0), steel),
-  );
-
-  // HP spool: compressor and high-pressure turbine
+  lp.add(mesh('fan', titanium), mesh('booster', steel), mesh('lpt', hotMetal), mesh('shaft', steel));
+  // HP spool: six-stage compressor on its drum, one-stage turbine
   const hp = new THREE.Group();
-  for (let i = 0; i < 6; i++) {
-    const k = i / 5;
-    hp.add(stage({
-      x: 2.2 + i * 0.24, count: 36 + i * 2, hub: 0.2 - k * 0.03, tip: 0.36 - k * 0.11, chord: 0.08, twist: 0.3, material: steel,
-    }));
-  }
-  hp.add(stage({ x: 4.45, count: 42, hub: 0.19, tip: 0.31, chord: 0.09, twist: -0.4, material: hotMetal }));
-
-  // Static parts: core casing (cut away with the nacelle), combustor, exhaust plug
-  const core = new THREE.Mesh(along(new THREE.CylinderGeometry(0.4, 0.44, 4.4, 64, 1, true)).translate(3.55, 0, 0), casing);
-  const combustor = new THREE.Mesh(along(new THREE.CylinderGeometry(0.31, 0.3, 0.7, 48, 1, true)).translate(3.95, 0, 0), flame);
-  const liner = new THREE.Mesh(along(new THREE.CylinderGeometry(0.18, 0.18, 0.7, 48, 1, true)).translate(3.95, 0, 0), flame);
-  const plug = new THREE.Mesh(new THREE.ConeGeometry(0.21, 1.8, 40).rotateZ(-Math.PI / 2).translate(6.55, 0, 0), steel);
+  hp.add(mesh('hpc', steel), mesh('hpt', hotMetal));
+  // Static: stator and guide-vane rows, turbine nozzle vanes, core casing (cut away with the
+  // nacelle), combustor liners (lit), dome with fuel-nozzle swirl cups, exhaust centre body
+  const core = mesh('casing', casing);
+  const combustor = mesh('combustor', flame);
+  root.add(lp, hp, mesh('stators', steel), mesh('ngv', hotMetal), core, combustor, mesh('dome', hotMetal), mesh('centerbody', steel));
 
   const flow = airflow();
-  root.add(lp, hp, core, combustor, liner, plug, flow);
+  root.add(flow);
 
   const anchors = {
     fan: new THREE.Vector3(1.08, 0.62, 0.1),

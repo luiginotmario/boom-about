@@ -210,8 +210,8 @@ export async function createOverture(renderer) {
   const ductMat = withAO(new THREE.MeshStandardMaterial({ color: 0x5b5f66, metalness: 1, roughness: 0.34, transparent: true, side: THREE.DoubleSide }), 'nacelle');
   const dark = new THREE.MeshStandardMaterial({ color: 0x0b0d12, roughness: 0.6, transparent: true, side: THREE.DoubleSide });
   const wickMat = new THREE.MeshStandardMaterial({ color: 0x1a1c20, roughness: 0.5, transparent: true });
-  const heroNacelle = withAO(skinMaterial({ color: PAINT_WHITE, roughness: 0.3, side: THREE.DoubleSide, clippingPlanes: [] }), 'nacelle');
-  const heroDuct = withAO(new THREE.MeshStandardMaterial({ color: 0x5b5f66, metalness: 1, roughness: 0.34, transparent: true, side: THREE.DoubleSide, clippingPlanes: [] }), 'nacelle');
+  const heroNacelle = withAO(skinMaterial({ color: PAINT_WHITE, roughness: 0.3, side: THREE.DoubleSide, clippingPlanes: [], clipShadows: true }), 'nacelle');
+  const heroDuct = withAO(new THREE.MeshStandardMaterial({ color: 0x5b5f66, metalness: 1, roughness: 0.34, transparent: true, side: THREE.DoubleSide, clippingPlanes: [], clipShadows: true }), 'nacelle');
   const lines = new THREE.LineBasicMaterial({
     color: 0xfff555, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
   });
