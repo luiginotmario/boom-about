@@ -181,6 +181,18 @@ html.ready .loader { opacity: 0; visibility: hidden; }
   .rail:hover .rail-item[aria-current]:not(:hover) .rail-label { opacity: 0; }
 }
 
+/* ── side scrim: a dark wash from the left edge behind left-aligned copy over bright sky ── */
+.side-scrim {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: min(760px, 70vw);
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(to right, rgba(2, 8, 22, 0.6), rgba(2, 8, 22, 0.32) 45%, transparent);
+  will-change: opacity;
+}
+
 /* ── hero scrim: lifts the white hero copy off the bright cloud deck ── */
 .hero-scrim {
   position: fixed;
@@ -266,14 +278,18 @@ html.ready .loader { opacity: 0; visibility: hidden; }
 .hint-touch { display: none; }
 @media (hover: none) { .hint-fine { display: none; } .hint-touch { display: inline; } }
 
-/* by the numbers — frosted tiles, set in Inter, odometer digits after Boom's own */
+/* Stat tiles — one component for every spec grid (By the Numbers, Symphony).
+   Frosted rounded tiles set in Inter; `.stats--2` is the two-column variant. */
 .cap--numbers { font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif; }
 .cap--numbers .title { margin-bottom: 22px; letter-spacing: -0.025em; }
 .stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
 }
+.stats--2 { grid-template-columns: repeat(2, 1fr); margin-top: 22px; }
+.stats--2 .stat dd { font-size: clamp(20px, 2vw, 28px); white-space: nowrap; }
 .stat {
   display: flex;
   flex-direction: column-reverse;
@@ -286,7 +302,7 @@ html.ready .loader { opacity: 0; visibility: hidden; }
   backdrop-filter: blur(18px) saturate(1.3);
   -webkit-backdrop-filter: blur(18px) saturate(1.3);
 }
-.stat:first-child, .stat:last-child { grid-column: span 2; }
+.stats--numbers .stat:first-child, .stats--numbers .stat:last-child { grid-column: span 2; }
 .stat dt { order: 2; margin-top: 6px; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
 .stat dd {
   display: flex;
@@ -313,10 +329,6 @@ html.ready .loader { opacity: 0; visibility: hidden; }
 }
 .rolled .odo-strip { transform: translateY(calc(var(--d) * -1em)); }
 
-.mini-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; margin-top: 22px; background: var(--line); border: 1px solid var(--line); }
-.mini-stats div { background: rgba(4, 10, 22, 0.55); padding: 14px 16px; display: flex; flex-direction: column-reverse; }
-.mini-stats dt { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); margin-top: 4px; }
-.mini-stats dd { color: var(--yellow); font-weight: 700; font-stretch: 112%; font-size: 22px; line-height: 1.1; }
 
 .mach-live {
   font-size: clamp(64px, 9vw, 132px);
@@ -330,6 +342,7 @@ html.ready .loader { opacity: 0; visibility: hidden; }
 .mach-live .unit { font-size: 0.34em; letter-spacing: 0.04em; color: var(--ink); vertical-align: 0.9em; }
 .mach-mu { margin-top: 14px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
 .mach-mu b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.mu-sym { text-transform: none; } /* uppercase would turn μ into a capital Greek M */
 
 .airlines { list-style: none; display: flex; flex-wrap: wrap; gap: 10px 26px; margin-top: 22px; }
 .airlines li { font-size: 13px; font-weight: 700; font-stretch: 115%; letter-spacing: 0.16em; text-transform: uppercase; }
@@ -436,8 +449,8 @@ html.ready .loader { opacity: 0; visibility: hidden; }
   .cap::before { inset: -120px -60px -80px; background: linear-gradient(transparent, rgba(2, 8, 22, 0.6) 40%); }
   .stats { grid-template-columns: repeat(2, 1fr); }
   .stat { padding: 12px 14px; border-radius: 18px; }
-  .stat:first-child { grid-column: span 2; }
-  .stat:last-child { grid-column: auto; }
+  .stats--numbers .stat:first-child { grid-column: span 2; }
+  .stats--numbers .stat:last-child { grid-column: auto; }
   .hud-chapter { display: none; }
   .hotspot-card { width: 190px; }
 }
